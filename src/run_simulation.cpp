@@ -1,5 +1,5 @@
 // ============================================================
-// SIMULATION RUNNER — Run a full simulated trading day
+// SIMULATION RUNNER: Run a full simulated trading day
 // ============================================================
 // This is the main entry point for running the simulation
 // without the TCP server. It creates the matching engine,

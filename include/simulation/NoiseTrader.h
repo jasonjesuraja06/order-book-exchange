@@ -5,7 +5,7 @@
 namespace exchange {
 
 // ============================================================
-// NOISE TRADER — Random order flow (the "background noise")
+// NOISE TRADER: Random order flow (the "background noise")
 // ============================================================
 //
 // Uncorrelated order flow standing in for participants who trade for

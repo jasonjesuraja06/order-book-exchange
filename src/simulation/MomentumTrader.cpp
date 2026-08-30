@@ -25,7 +25,7 @@ void MomentumTrader::update_price(double price) {
 }
 
 // ============================================================
-// ON TICK — signal evaluation
+// ON TICK: signal evaluation
 // ============================================================
 // Wait for a full window, average it, and compare the latest price
 // against that average. Deviation beyond the threshold in either

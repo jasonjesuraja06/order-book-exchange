@@ -5,7 +5,7 @@
 namespace exchange {
 
 // ============================================================
-// ORDER — a request to buy or sell
+// ORDER: a request to buy or sell
 // ============================================================
 //
 // MEMORY LAYOUT
@@ -25,16 +25,16 @@ namespace exchange {
 // ============================================================
 
 struct Order {
-    OrderId   id;              // 8 bytes — unique identifier
-    Price     price;           // 8 bytes — limit price (0 for market orders)
-    Quantity  quantity;         // 4 bytes — how many shares
-    Quantity  remaining_qty;   // 4 bytes — how many shares still unfilled
-    Timestamp timestamp;       // 8 bytes — when the order arrived (nanoseconds)
-    Side      side;            // 1 byte  — buy or sell
-    OrderType type;            // 1 byte  — limit, market, or IOC
-    OrderStatus status;        // 1 byte  — current state of the order
+    OrderId   id;              // 8 bytes, unique identifier
+    Price     price;           // 8 bytes, limit price (0 for market orders)
+    Quantity  quantity;         // 4 bytes, how many shares
+    Quantity  remaining_qty;   // 4 bytes, how many shares still unfilled
+    Timestamp timestamp;       // 8 bytes, when the order arrived (nanoseconds)
+    Side      side;            // 1 byte , buy or sell
+    OrderType type;            // 1 byte , limit, market, or IOC
+    OrderStatus status;        // 1 byte , current state of the order
 
-    // Default constructor — creates an empty/invalid order
+    // Default constructor, creates an empty/invalid order
     Order() = default;
 
     // status, remaining_qty, and timestamp are derived rather than
@@ -59,7 +59,7 @@ struct Order {
 };
 
 // ============================================================
-// TRADE — A record of a match between two orders
+// TRADE: A record of a match between two orders
 // ============================================================
 // When a buy order's price >= a sell order's price, a Trade happens.
 // This is the "execution report" that both parties receive.

@@ -9,23 +9,23 @@
 namespace exchange {
 
 // ============================================================
-// TRADER — Base class for all simulated trading agents
+// TRADER: Base class for all simulated trading agents
 // ============================================================
 //
 // Each bot type (market maker, momentum, noise) inherits from this
 // and implements its own strategy via the on_tick() method.
 //
-// Think of on_tick() like a heartbeat — every time the simulation
-// clock advances, each bot gets a chance to look at the market
-// and decide: "Should I submit orders? Cancel old ones? Do nothing?"
+// on_tick() runs once per simulation clock advance. Each agent reads
+// the market and decides whether to submit orders, cancel resting
+// ones, or do nothing.
 //
 // PORTFOLIO TRACKING:
 // Each bot tracks its own P&L (profit and loss):
-//   - position: how many shares you hold (positive = long, negative = short)
-//   - cash: how much money you have
+//   - position: net shares held (positive long, negative short)
+//   - cash: cash balance
 //   - P&L = cash + (position * current_price) - starting_cash
 //
-// This is how we measure which strategy "won" the simulation.
+// P&L is the comparison metric across strategies.
 // ============================================================
 
 struct TraderStats {
@@ -61,9 +61,9 @@ public:
 
     virtual ~Trader() = default;
 
-    // Called every tick — the bot decides what to do.
+    // Called every tick, the bot decides what to do.
     // tick_num is the current simulation step (0, 1, 2, ...)
-    // This is pure virtual — each bot type MUST implement it.
+    // This is pure virtual, each bot type MUST implement it.
     virtual void on_tick(uint64_t tick_num) = 0;
 
     // Called when one of this bot's orders is filled.

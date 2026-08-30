@@ -6,7 +6,7 @@
 namespace exchange {
 
 // ============================================================
-// MOMENTUM TRADER — Follows price trends
+// MOMENTUM TRADER: Follows price trends
 // ============================================================
 //
 // Trades a simple moving average crossover: track the last N executed

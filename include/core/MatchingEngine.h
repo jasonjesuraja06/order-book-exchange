@@ -11,7 +11,7 @@
 namespace exchange {
 
 // ============================================================
-// MATCHING ENGINE — The brain of the exchange
+// MATCHING ENGINE: order intake, matching, and resting
 // ============================================================
 //
 // The matching engine is the central component that:
@@ -40,12 +40,10 @@ namespace exchange {
 //
 //   New order: BUY 70 shares at $100 (LIMIT)
 //
-//   Step 1: Best ask is $100. Buy price ($100) >= ask price ($100). MATCH!
-//   Step 2: Alice is first at $100 (time priority). Fill 50 from Alice.
-//           Alice is fully filled, removed from book.
-//   Step 3: Still need 20 more. Bob is next at $100. Fill 20 from Bob.
-//           Bob has 10 shares remaining, stays on book.
-//   Step 4: New order fully filled (50 + 20 = 70). Done!
+//   Best ask is $100 and the buy price is $100, so the order crosses.
+//   Alice is first at $100 by time priority, so 50 fill from Alice and
+//   she leaves the book. Bob is next at $100, so 20 fill from Bob and
+//   his remaining 10 stay resting. The incoming order is fully filled.
 //
 //   Trades generated:
 //     Trade 1: BUY matched ALICE's SELL, 50 shares @ $100
@@ -88,7 +86,7 @@ public:
     MatchingEngine();
 
     // Submit an order to the exchange.
-    // This is the main entry point — handles limit, market, and IOC orders.
+    // Entry point for limit, market, and IOC orders.
     // Returns the order ID assigned to this order.
     //
     // The engine will:
@@ -127,7 +125,7 @@ private:
     // ---- Internal matching logic ----
 
     // Try to match an incoming order against the opposite side.
-    // This is the core matching loop — the hottest code path.
+    // The core matching loop, and the hottest code path.
     // Returns a vector of trades generated.
     std::vector<Trade> match_order(OrderBook& book, Order* order);
 

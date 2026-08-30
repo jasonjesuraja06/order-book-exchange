@@ -5,7 +5,7 @@
 namespace exchange {
 
 // ============================================================
-// MARKET MAKER — Provides liquidity by quoting both sides
+// MARKET MAKER: Provides liquidity by quoting both sides
 // ============================================================
 //
 // Quotes both sides around a fair value estimate, earning the spread

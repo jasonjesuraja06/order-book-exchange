@@ -12,7 +12,7 @@
 namespace exchange {
 
 // ============================================================
-// ORDER BOOK — The central data structure of any exchange
+// ORDER BOOK: The central data structure of any exchange
 // ============================================================
 //
 // Two sorted sides. Bids descend from the highest price a buyer will
@@ -40,14 +40,13 @@ namespace exchange {
 // is used here for clarity and because the level count stays small.
 // ============================================================
 
-// A single price level — all orders at the same price, in FIFO order.
-// "FIFO" = First In, First Out = time priority.
-// If Alice and Bob both want to buy at $150, Alice gets filled first
-// because she submitted her order first.
+// A single price level: all orders at one price, in arrival order.
+// The earlier order at a given price is matched first, which is what
+// time priority means.
 using PriceLevel = std::list<Order*>;
 
 // Iterator pointing to a specific order within a price level.
-// We store these in a lookup map so we can cancel any order in O(1).
+// The lookup map stores one per order so cancel is O(1).
 using OrderIterator = PriceLevel::iterator;
 
 class OrderBook {
@@ -58,18 +57,18 @@ public:
     // ---- Core Operations ----
 
     // Add a new order to the book. Returns a pointer to the order
-    // stored in our object pool (NOT the caller's copy).
+    // stored in the object pool, not to the caller's copy.
     // This is O(log N) where N = number of distinct price levels.
     Order* add_order(Side side, OrderType type, Price price, Quantity quantity);
 
     // Cancel an order by ID. Returns true if found and cancelled.
-    // This is O(1) — we use the lookup map to jump directly to it.
+    // O(1): the lookup map jumps straight to the order.
     bool cancel_order(OrderId order_id);
 
-    // Modify an existing order's quantity. In real exchanges, modifying
-    // price = cancel + new order (you lose time priority). Modifying
-    // quantity down keeps your priority. Modifying up = cancel + new.
-    // We implement the simple case: reduce quantity, keep priority.
+    // Modify an existing order's quantity. On real exchanges a price
+    // change is a cancel plus a new order and forfeits time priority,
+    // a quantity decrease keeps it, and a quantity increase does not.
+    // Only the decrease case is implemented here.
     bool reduce_order(OrderId order_id, Quantity new_quantity);
 
     // ---- Accessors ----
@@ -126,7 +125,7 @@ private:
 
     // THE BOOK ITSELF:
     // bids_ is sorted by price DESCENDING (highest first).
-    //   We achieve this with std::greater<Price> comparator.
+    //   The std::greater<Price> comparator gives that ordering.
     //   bids_.begin() = highest bid = best buyer.
     //
     // asks_ is sorted by price ASCENDING (lowest first).
@@ -137,14 +136,11 @@ private:
 
     // O(1) ORDER LOOKUP:
     // Maps OrderId -> {side, price, iterator_into_price_level}
-    // This lets us cancel or modify any order without searching.
+    // Cancel and modify therefore do not search the book.
     //
-    // Without this, cancelling order #12345 would require:
-    //   1. Search all price levels (O(N price levels))
-    //   2. Search within each level (O(M orders per level))
-    //   = O(N*M) total — WAY too slow
-    //
-    // With this: O(1) lookup, O(1) erase from linked list.
+    // Without it, cancelling one order would scan every price level
+    // and every order within a level, O(N*M) for N levels of M orders.
+    // With it: O(1) lookup and O(1) erase from the linked list.
     struct OrderLocation {
         Side side;
         Price price;
@@ -152,13 +148,12 @@ private:
     };
     std::unordered_map<OrderId, OrderLocation> order_lookup_;
 
-    // Object pool for orders — avoids heap allocation per order.
-    // See ObjectPool.h for why this matters.
+    // Object pool for orders, which avoids a heap allocation per order.
+    // ObjectPool.h documents the pointer-stability requirement.
     ObjectPool<Order> order_pool_;
 
     // Monotonically increasing order IDs.
-    // Using atomic<> would make this thread-safe, but we'll handle
-    // thread safety at the MatchingEngine level instead.
+    // Not atomic: the MatchingEngine mutex already serialises access.
     OrderId next_order_id_ = 1;
 
     // Helper: clean up empty price levels after orders are removed.

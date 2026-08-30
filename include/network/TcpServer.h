@@ -13,7 +13,7 @@ namespace exchange {
 namespace risk { class RiskChecker; }
 
 // ============================================================
-// TCP SERVER — network front end for the matching engine
+// TCP SERVER: network front end for the matching engine
 // ============================================================
 //
 // The main thread runs the accept loop; each accepted connection gets
@@ -37,7 +37,7 @@ public:
               risk::RiskChecker* risk = nullptr);
     ~TcpServer();
 
-    // Start listening for connections (blocking — runs forever)
+    // Start listening for connections (blocking, runs forever)
     void start();
 
     // Signal the server to stop

@@ -1,5 +1,5 @@
 // ============================================================
-// ORDER BOOK TESTS — Validate the core data structure
+// ORDER BOOK TESTS: Validate the core data structure
 // ============================================================
 
 #include <gtest/gtest.h>
@@ -9,8 +9,7 @@ using namespace exchange;
 
 class OrderBookTest : public ::testing::Test {
 protected:
-    // This runs before EACH test — gives us a fresh empty book.
-    // "fixtures" in Google Test let you share setup code.
+    // A GoogleTest fixture: each test in this suite gets a fresh book.
     OrderBook book{"AAPL"};
 };
 
@@ -42,7 +41,7 @@ TEST_F(OrderBookTest, AddSingleAsk) {
 }
 
 TEST_F(OrderBookTest, BestBidIsHighest) {
-    // Add bids at different prices — best bid should be highest
+    // Add bids at different prices, best bid should be highest
     book.add_order(Side::Buy, OrderType::Limit, 99.00, 100);
     book.add_order(Side::Buy, OrderType::Limit, 101.00, 100);
     book.add_order(Side::Buy, OrderType::Limit, 100.00, 100);
@@ -52,7 +51,7 @@ TEST_F(OrderBookTest, BestBidIsHighest) {
 }
 
 TEST_F(OrderBookTest, BestAskIsLowest) {
-    // Add asks at different prices — best ask should be lowest
+    // Add asks at different prices, best ask should be lowest
     book.add_order(Side::Sell, OrderType::Limit, 102.00, 100);
     book.add_order(Side::Sell, OrderType::Limit, 100.00, 100);
     book.add_order(Side::Sell, OrderType::Limit, 101.00, 100);

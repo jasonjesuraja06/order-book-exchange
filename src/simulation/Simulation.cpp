@@ -40,7 +40,7 @@ Simulation::Simulation(const SimulationConfig& config)
 }
 
 // ============================================================
-// RUN — main simulation loop
+// RUN: main simulation loop
 // ============================================================
 // Per tick: random-walk the reference price, push it to the agents,
 // let each agent act (orders are matched synchronously), and record
@@ -161,7 +161,7 @@ SimulationResults Simulation::run() {
 }
 
 // ============================================================
-// PRINT RESULTS — Formatted simulation summary
+// PRINT RESULTS: Formatted simulation summary
 // ============================================================
 void Simulation::print_results(const SimulationResults& results) {
     std::cout << "\n";

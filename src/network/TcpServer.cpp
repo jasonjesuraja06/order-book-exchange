@@ -22,7 +22,7 @@ TcpServer::~TcpServer() {
 }
 
 // ============================================================
-// START — listening socket and accept loop
+// START: listening socket and accept loop
 // ============================================================
 // socket, bind, listen, then accept in a loop. accept() returns a
 // separate descriptor per connection while the listening descriptor
@@ -64,7 +64,7 @@ void TcpServer::start() {
     running_ = true;
     std::cout << "Exchange server listening on port " << port_ << "\n";
 
-    // Step 4: Accept loop — blocks waiting for clients
+    // Step 4: Accept loop, blocks waiting for clients
     while (running_) {
         struct sockaddr_in client_addr{};
         socklen_t client_len = sizeof(client_addr);
@@ -97,7 +97,7 @@ void TcpServer::stop() {
 }
 
 // ============================================================
-// HANDLE CLIENT — Process messages from one connection
+// HANDLE CLIENT: Process messages from one connection
 // ============================================================
 // This runs in its own thread, reading messages in a loop.
 //
@@ -119,8 +119,8 @@ void TcpServer::handle_client(int client_fd) {
         // Read the message type (first byte)
         MessageType msg_type;
         ssize_t n = recv(client_fd, &msg_type, sizeof(msg_type), MSG_WAITALL);
-        // MSG_WAITALL = "don't return until you've read ALL the bytes I asked for"
-        // Without it, recv might return partial reads that we'd have to reassemble.
+        // MSG_WAITALL blocks until the full request is read. Without it,
+        // recv can return a partial read that the caller must reassemble.
 
         if (n <= 0) break;  // Client disconnected or error
 

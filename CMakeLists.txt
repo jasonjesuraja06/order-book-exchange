@@ -74,18 +74,20 @@ target_link_libraries(exchange_network PUBLIC exchange_core exchange_risk)
 
 # ---------- Main Exchange Executable ----------
 add_executable(exchange src/main.cpp)
+# Each library declares its own PUBLIC dependencies above, so the executables
+# link only what they use directly and CMake propagates the rest in an order
+# that satisfies GNU ld as well as Apple's order-insensitive linker.
 target_link_libraries(exchange
-    exchange_core exchange_network exchange_simulation exchange_risk exchange_metrics pthread)
+    exchange_network exchange_simulation exchange_metrics pthread)
 
 # ---------- Simulation Runner ----------
 add_executable(run_simulation src/run_simulation.cpp)
 target_link_libraries(run_simulation
-    exchange_core exchange_simulation exchange_metrics pthread)
+    exchange_simulation exchange_metrics pthread)
 
 # ---------- Replay Runner ----------
 add_executable(run_replay src/run_replay.cpp)
-target_link_libraries(run_replay
-    exchange_core exchange_risk exchange_metrics exchange_replay pthread)
+target_link_libraries(run_replay exchange_replay pthread)
 
 # ---------- Google Test ----------
 FetchContent_Declare(
@@ -106,8 +108,7 @@ add_executable(tests
     tests/test_latency_histogram.cpp
     tests/test_replay_harness.cpp
 )
-target_link_libraries(tests
-    exchange_core exchange_risk exchange_metrics exchange_replay GTest::gtest_main)
+target_link_libraries(tests exchange_replay GTest::gtest_main)
 target_compile_definitions(tests PRIVATE
     SAMPLE_TAPE_PATH="${CMAKE_SOURCE_DIR}/data/sample_tape.csv")
 include(GoogleTest)

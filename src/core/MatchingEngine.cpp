@@ -11,7 +11,7 @@ MatchingEngine::MatchingEngine() = default;
 // ============================================================
 // Each stock symbol gets its own order book. If this is the first
 // order for "AAPL", we create a new empty OrderBook for it.
-// The try_emplace is like Python's dict.setdefault() — it only
+// try_emplace inserts only if the key is absent, so it
 // creates the value if the key doesn't already exist.
 // ============================================================
 OrderBook& MatchingEngine::get_order_book(const std::string& symbol) {
@@ -24,7 +24,7 @@ void MatchingEngine::set_trade_callback(TradeCallback callback) {
 }
 
 // ============================================================
-// SUBMIT ORDER — main entry point
+// SUBMIT ORDER: main entry point
 // ============================================================
 // Validate, match against the opposite side, then rest or cancel the
 // remainder depending on order type. The mutex serialises the whole
@@ -120,14 +120,13 @@ bool MatchingEngine::cancel_order(const std::string& symbol, OrderId order_id) {
 }
 
 // ============================================================
-// MATCH ORDER — The core matching loop
+// MATCH ORDER: The core matching loop
 // ============================================================
-// This is the HOTTEST code path in the entire exchange.
-// Every nanosecond matters here. Let's trace through it:
+// The hottest code path in the exchange.
 //
 // For a BUY order:
 //   1. Look at the best (lowest) ask price level
-//   2. Can we match? (buy price >= ask price)
+//   2. Test whether it crosses (buy price >= ask price)
 //   3. Walk through orders at that price level (time priority)
 //   4. Execute matches, reducing quantities
 //   5. Move to the next price level if this one is exhausted
@@ -137,8 +136,8 @@ bool MatchingEngine::cancel_order(const std::string& symbol, OrderId order_id) {
 //
 // IMPORTANT: The trade price is ALWAYS the resting order's price,
 // not the incoming order's price. This is how all exchanges work.
-// If you submit a buy at $101 and the best ask is $100, you get
-// filled at $100 (better for you!). This is called "price improvement."
+// A buy at $101 against a best ask of $100 fills at $100, which is
+// price improvement for the incoming side.
 // ============================================================
 std::vector<Trade> MatchingEngine::match_order(OrderBook& book, Order* incoming) {
     std::vector<Trade> trades;
@@ -170,7 +169,7 @@ std::vector<Trade> MatchingEngine::match_order(OrderBook& book, Order* incoming)
             ? (incoming->price >= resting->price)
             : (incoming->price <= resting->price);
 
-        if (!price_match) break;  // No more matchable prices — done
+        if (!price_match) break;  // No more matchable prices, done
 
         // ---- EXECUTE THE MATCH ----
         Trade trade = execute_match(incoming, resting);
@@ -194,7 +193,7 @@ std::vector<Trade> MatchingEngine::match_order(OrderBook& book, Order* incoming)
 }
 
 // ============================================================
-// EXECUTE MATCH — Single trade between two orders
+// EXECUTE MATCH: Single trade between two orders
 // ============================================================
 // This is the atomic unit of matching: one incoming order meets
 // one resting order. We figure out:
@@ -229,7 +228,7 @@ Trade MatchingEngine::execute_match(Order* incoming, Order* resting) {
     trade.quantity = fill_qty;
 
     // The buy_order_id and sell_order_id fields tell both parties
-    // what happened — "your order #X traded against order #Y"
+    // the resulting fill, reported back to the submitting client
     if (incoming->side == Side::Buy) {
         trade.buy_order_id = incoming->id;
         trade.sell_order_id = resting->id;

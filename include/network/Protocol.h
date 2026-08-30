@@ -8,7 +8,7 @@
 namespace exchange {
 
 // ============================================================
-// BINARY PROTOCOL — How clients talk to the exchange
+// BINARY PROTOCOL: How clients talk to the exchange
 // ============================================================
 //
 // Fixed-size packed messages, each led by a 1-byte type tag, so the
@@ -22,9 +22,9 @@ namespace exchange {
 // would need explicit endian conversion to run across architectures.
 //
 // MESSAGE TYPES:
-// 1. OrderMessage      — Client -> Exchange: "submit this order"
-// 2. CancelMessage     — Client -> Exchange: "cancel order #X"
-// 3. ExecutionReport   — Exchange -> Client: "here's what happened"
+// 1. OrderMessage     , Client -> Exchange: "submit this order"
+// 2. CancelMessage    , Client -> Exchange: "cancel order #X"
+// 3. ExecutionReport  , Exchange -> Client: "here's what happened"
 // ============================================================
 
 // Every message starts with this byte so the receiver knows
@@ -89,7 +89,7 @@ struct CancelMessage {
 // ============================================================
 // EXECUTION REPORT (Exchange -> Client)
 // ============================================================
-// "Your order #X was accepted/filled/rejected. Here are the details."
+// Reports acceptance, fill, or rejection of one submitted order.
 //
 // This is sent back to the client for every order and every trade.
 // If an order generates 3 trades, the client receives 3 exec reports.

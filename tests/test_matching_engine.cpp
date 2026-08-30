@@ -1,5 +1,5 @@
 // ============================================================
-// MATCHING ENGINE TESTS — Validate the core matching logic
+// MATCHING ENGINE TESTS: Validate the core matching logic
 // ============================================================
 // These tests verify the most critical behavior of the exchange:
 // that orders match correctly at the right prices with the right
@@ -31,7 +31,7 @@ protected:
 // ---- Basic Matching ----
 
 TEST_F(MatchingEngineTest, NoMatchWhenBookIsEmpty) {
-    // Submit a limit buy — nothing to match against
+    // Submit a limit buy, nothing to match against
     engine.submit_order("AAPL", Side::Buy, OrderType::Limit, 100.00, 50);
 
     EXPECT_EQ(trades.size(), 0);
@@ -54,7 +54,7 @@ TEST_F(MatchingEngineTest, ExactPriceMatch) {
 TEST_F(MatchingEngineTest, BuyerGetsPriceImprovement) {
     // Sell at $99 (cheap seller). Buy at $101 (willing to pay more).
     // Trade should happen at $99 (the resting sell price).
-    // The buyer "saved" $2/share — this is price improvement.
+    // The buyer "saved" $2/share, this is price improvement.
     engine.submit_order("AAPL", Side::Sell, OrderType::Limit, 99.00, 50);
     engine.submit_order("AAPL", Side::Buy, OrderType::Limit, 101.00, 50);
 
@@ -101,11 +101,11 @@ TEST_F(MatchingEngineTest, SweepMultiplePriceLevels) {
 // ---- Time Priority ----
 
 TEST_F(MatchingEngineTest, TimePriorityAtSamePrice) {
-    // Two sells at the same price — first one should match first
+    // Two sells at the same price, first one should match first
     OrderId first = engine.submit_order("AAPL", Side::Sell, OrderType::Limit, 100.00, 50);
     OrderId second = engine.submit_order("AAPL", Side::Sell, OrderType::Limit, 100.00, 50);
 
-    // Buy 50 — should match against 'first' (arrived earlier)
+    // Buy 50, should match against 'first' (arrived earlier)
     engine.submit_order("AAPL", Side::Buy, OrderType::Limit, 100.00, 50);
 
     ASSERT_EQ(trades.size(), 1);
@@ -118,7 +118,7 @@ TEST_F(MatchingEngineTest, TimePriorityAtSamePrice) {
 TEST_F(MatchingEngineTest, MarketBuyFillsImmediately) {
     engine.submit_order("AAPL", Side::Sell, OrderType::Limit, 100.00, 50);
 
-    // Market buy — should fill immediately at best ask ($100)
+    // Market buy, should fill immediately at best ask ($100)
     engine.submit_order("AAPL", Side::Buy, OrderType::Market, 0.0, 30);
 
     ASSERT_EQ(trades.size(), 1);
@@ -127,7 +127,7 @@ TEST_F(MatchingEngineTest, MarketBuyFillsImmediately) {
 }
 
 TEST_F(MatchingEngineTest, MarketOrderCancelledWhenNoLiquidity) {
-    // Market buy with empty book — should be rejected/cancelled, not resting
+    // Market buy with empty book, should be rejected/cancelled, not resting
     engine.submit_order("AAPL", Side::Buy, OrderType::Market, 0.0, 50);
 
     EXPECT_EQ(trades.size(), 0);
@@ -139,13 +139,13 @@ TEST_F(MatchingEngineTest, MarketOrderCancelledWhenNoLiquidity) {
 TEST_F(MatchingEngineTest, IOCFillsAndCancelsRemainder) {
     engine.submit_order("AAPL", Side::Sell, OrderType::Limit, 100.00, 30);
 
-    // IOC buy 50 — should fill 30 (all available) and cancel remaining 20
+    // IOC buy 50, should fill 30 (all available) and cancel remaining 20
     engine.submit_order("AAPL", Side::Buy, OrderType::IOC, 100.00, 50);
 
     ASSERT_EQ(trades.size(), 1);
     EXPECT_EQ(trades[0].quantity, 30);
 
-    // IOC remainder cancelled — book should be empty
+    // IOC remainder cancelled, book should be empty
     EXPECT_EQ(engine.get_order_book("AAPL").order_count(), 0);
 }
 
@@ -157,7 +157,7 @@ TEST_F(MatchingEngineTest, CancelPreventsMatch) {
     // Cancel the sell before a buy comes in
     EXPECT_TRUE(engine.cancel_order("AAPL", sell_id));
 
-    // Now submit a buy at the same price — no match possible
+    // Now submit a buy at the same price, no match possible
     engine.submit_order("AAPL", Side::Buy, OrderType::Limit, 100.00, 50);
 
     EXPECT_EQ(trades.size(), 0);
@@ -183,7 +183,7 @@ TEST_F(MatchingEngineTest, DifferentSymbolsDontMatch) {
     engine.submit_order("AAPL", Side::Sell, OrderType::Limit, 100.00, 50);
     engine.submit_order("GOOG", Side::Buy, OrderType::Limit, 100.00, 50);
 
-    // Different symbols — should NOT match
+    // Different symbols, should NOT match
     EXPECT_EQ(trades.size(), 0);
     EXPECT_EQ(engine.get_order_book("AAPL").order_count(), 1);
     EXPECT_EQ(engine.get_order_book("GOOG").order_count(), 1);

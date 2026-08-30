@@ -16,7 +16,7 @@ MarketMaker::MarketMaker(MatchingEngine& engine, const std::string& symbol,
 {}
 
 // ============================================================
-// ON TICK — The market maker's decision loop
+// ON TICK: The market maker's decision loop
 // ============================================================
 // Called every simulation tick. Here's what happens:
 //
@@ -37,7 +37,7 @@ MarketMaker::MarketMaker(MatchingEngine& engine, const std::string& symbol,
 // Position = -300 → skew = +0.30 → both prices rise by $0.30
 //
 // This naturally keeps our position near zero, which is the goal
-// of market making — profit from the spread, not from direction.
+// of market making, profit from the spread, not from direction.
 // ============================================================
 void MarketMaker::on_tick(uint64_t tick_num) {
     // Step 1: Cancel stale quotes

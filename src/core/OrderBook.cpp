@@ -10,36 +10,29 @@ OrderBook::OrderBook(const std::string& symbol, size_t pool_size)
 // ============================================================
 // ADD ORDER
 // ============================================================
-// Step by step:
-// 1. Get an Order object from the pool (O(1), no heap alloc)
-// 2. Fill in its fields
-// 3. Look up (or create) the price level in the map (O(log N))
-// 4. Append to the back of that level's list (O(1))
-//    Back = lowest time priority = FIFO ordering
-// 5. Store a lookup entry so we can cancel in O(1) later
+// Takes an Order from the pool (O(1), no heap allocation), fills it in,
+// finds or creates its price level in the map (O(log N)), appends it to
+// the back of that level's list (O(1)), and records a lookup entry so a
+// later cancel is O(1).
 //
-// WHY we append to the BACK of the list:
-// Price-time priority means earlier orders match first.
-// list.front() = earliest order = matches first.
-// list.back() = newest order = matches last.
-// So new orders go to the back.
+// New orders go to the back because price-time priority matches
+// list.front() first: the front is the earliest arrival at that price.
 // ============================================================
 Order* OrderBook::add_order(Side side, OrderType type, Price price, Quantity quantity) {
-    // Step 1: Get a recycled Order from the pool
     Order* order = order_pool_.acquire();
 
-    // Step 2: Initialize it (placement-style — we reuse the memory)
+    // Overwrite the recycled object in place; the pool owns the storage.
     *order = Order(next_order_id_++, side, type, price, quantity);
 
     // Step 3-4: Insert into the correct side of the book
     if (side == Side::Buy) {
         // operator[] on std::map creates the key if it doesn't exist.
         // So if there's no price level at $150, one is created automatically.
-        // Then we push_back the order pointer into that level's list.
+        // The order pointer is then appended to that level's list.
         bids_[price].push_back(order);
 
-        // Step 5: Save the iterator for O(1) cancel later.
-        // prev(end()) points to the element we just push_back'd.
+        // Save the iterator for an O(1) cancel later. prev(end()) is
+        // the element just appended.
         auto it = std::prev(bids_[price].end());
         order_lookup_[order->id] = {side, price, it};
     } else {
@@ -52,7 +45,7 @@ Order* OrderBook::add_order(Side side, OrderType type, Price price, Quantity qua
 }
 
 // ============================================================
-// CANCEL ORDER — O(1) average case
+// CANCEL ORDER: O(1) average case
 // ============================================================
 // This is where the order_lookup_ map pays off.
 // Without it: search every price level, every order = O(N*M)
@@ -63,7 +56,7 @@ Order* OrderBook::add_order(Side side, OrderType type, Price price, Quantity qua
 // So cancel performance is arguably MORE important than add.
 // ============================================================
 bool OrderBook::cancel_order(OrderId order_id) {
-    // Step 1: Look up the order's location
+    // Look up the order's location.
     auto it = order_lookup_.find(order_id);
     if (it == order_lookup_.end()) {
         return false;  // Order not found (already filled or never existed)
@@ -71,13 +64,13 @@ bool OrderBook::cancel_order(OrderId order_id) {
 
     OrderLocation& loc = it->second;
 
-    // Step 2: Get the order pointer and mark it cancelled
+    // Take the order pointer and mark it cancelled.
     Order* order = *loc.iterator;
     order->status = OrderStatus::Cancelled;
 
-    // Step 3: Remove from the price level's linked list
-    // std::list::erase is O(1) when you have the iterator.
-    // This is why we use std::list instead of std::vector —
+    // Remove from the price level's linked list. std::list::erase is
+    // O(1) given the iterator, which is why the level is a std::list
+    // rather than a std::vector:
     // vector erase is O(N) because it shifts all subsequent elements.
     if (loc.side == Side::Buy) {
         bids_[loc.price].erase(loc.iterator);
@@ -85,10 +78,10 @@ bool OrderBook::cancel_order(OrderId order_id) {
         asks_[loc.price].erase(loc.iterator);
     }
 
-    // Step 4: Clean up empty price levels
+    // Clean up empty price levels.
     cleanup_price_level(loc.side, loc.price);
 
-    // Step 5: Remove from lookup map and return to pool
+    // Remove from the lookup map and return the order to the pool.
     order_lookup_.erase(it);
     order_pool_.release(order);
 
@@ -96,7 +89,7 @@ bool OrderBook::cancel_order(OrderId order_id) {
 }
 
 // ============================================================
-// REDUCE ORDER — shrink quantity while holding queue position
+// REDUCE ORDER: shrink quantity while holding queue position
 // ============================================================
 // Exchange convention: reducing displayed quantity keeps the order's
 // place in the FIFO queue at its level, because it takes liquidity
@@ -122,7 +115,7 @@ bool OrderBook::reduce_order(OrderId order_id, Quantity new_quantity) {
 }
 
 // ============================================================
-// REMOVE ORDER — Called by MatchingEngine after a full fill
+// REMOVE ORDER: Called by MatchingEngine after a full fill
 // ============================================================
 void OrderBook::remove_order(Order* order) {
     auto it = order_lookup_.find(order->id);
@@ -142,7 +135,7 @@ void OrderBook::remove_order(Order* order) {
 }
 
 // ============================================================
-// ACCESSORS — Best prices, spread, depth
+// ACCESSORS: Best prices, spread, depth
 // ============================================================
 
 Price OrderBook::best_bid() const {
@@ -192,7 +185,7 @@ Quantity OrderBook::total_ask_quantity() const {
 }
 
 // ============================================================
-// MATCHING SUPPORT — Used by MatchingEngine
+// MATCHING SUPPORT: Used by MatchingEngine
 // ============================================================
 
 PriceLevel* OrderBook::best_bid_level() {
@@ -206,7 +199,7 @@ PriceLevel* OrderBook::best_ask_level() {
 }
 
 // ============================================================
-// CLEANUP — Remove empty price levels
+// CLEANUP: Remove empty price levels
 // ============================================================
 // After all orders at a price are filled/cancelled, the price
 // level is an empty list. We remove it from the map to keep

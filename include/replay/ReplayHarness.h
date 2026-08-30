@@ -15,12 +15,12 @@ namespace risk { class RiskChecker; }
 namespace exchange::replay {
 
 // ============================================================
-// REPLAY HARNESS — Deterministic regression testing via tapes
+// REPLAY HARNESS: Deterministic regression testing via tapes
 // ============================================================
 // In production exchanges, every release is regression-tested
 // by replaying historical "tapes" (logs of every order and
 // cancel from a representative trading day) through the new
-// build. If the trade output diverges, you have a regression.
+// build. Divergent trade output is a regression.
 //
 // This is the technique used at NYSE, CME, Citadel, Jump, JS
 // (and basically every serious trading firm) to certify code

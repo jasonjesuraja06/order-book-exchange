@@ -26,8 +26,8 @@ namespace exchange::metrics {
 // total.
 //
 // Resolution: significant_figures=3 means percentiles are
-// accurate to 0.1% (the bucket your sample falls into is
-// within 0.1% of its true value).
+// accurate to 0.1%: a recorded sample lands in a bucket within
+// 0.1% of its true value.
 // ============================================================
 class LatencyHistogram {
 public:
@@ -45,9 +45,9 @@ public:
     // Record a single value (e.g., nanoseconds).
     void record(int64_t value_ns);
 
-    // Coordinated-omission correction: if you observed value_ns but the
-    // expected gap between samples was expected_interval_ns, this back-fills
-    // missed samples to account for measurement skew.
+    // Coordinated-omission correction: given an observed value_ns and an
+    // expected gap of expected_interval_ns between samples, this back-fills
+    // the samples a stalled measurement loop missed.
     void record_corrected(int64_t value_ns, int64_t expected_interval_ns);
 
     // Percentile queries (e.g., value_at_percentile(99.0) = p99)

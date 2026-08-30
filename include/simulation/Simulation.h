@@ -12,7 +12,7 @@
 namespace exchange {
 
 // ============================================================
-// SIMULATION — Drives the agents against one matching engine
+// SIMULATION: Drives the agents against one matching engine
 // ============================================================
 //
 // Tick-based rather than event-based: fixed time steps, every agent

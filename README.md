@@ -32,13 +32,13 @@ Risk runs on two paths: the TCP server checks every `NewOrder` message before th
 
 ## Measured results
 
-Apple M4 Pro (14 cores), 48 GB RAM, macOS arm64, Apple clang, `-DCMAKE_BUILD_TYPE=Release` (`-O3`). Raw output for every row is committed under `results/`.
+Apple M4 Pro (14 cores), 48 GB RAM, macOS arm64, Apple clang, `-DCMAKE_BUILD_TYPE=Release` (`-O3`). Raw output for every row is committed under `results/`. The throughput harness was run twice and both runs are committed, because a single wall-clock reading on a laptop is not a stable number.
 
 | Metric | Measured | Reproduce |
 |---|---|---|
-| Sustained throughput | 9.01M ops/sec (5,000,000 ops in 0.555 s) | `./build/bench_throughput 5000000` |
-| Latency p50 / p99 / p99.9 | 83 ns / 500 ns / 583 ns | same run, phase 2 |
-| Latency mean / max | 105 ns / 276,991 ns | same run, phase 2 |
+| Sustained throughput | 9.01M and 10.08M ops/sec across two runs of 5,000,000 ops | `./build/bench_throughput 5000000` |
+| Latency p50 / p99 / p99.9 | 83 / 500 / 583 ns and 83 / 459 / 500 ns | same two runs, phase 2 |
+| Latency mean / max | 105 ns / 276,991 ns and 96 ns / 247,679 ns | same two runs, phase 2 |
 | Limit insert, no match | 86.7 ns (11.53M/sec) | `./build/benchmarks --benchmark_min_time=1s` |
 | Limit match, one trade | 260 ns per 2 orders (7.71M orders/sec) | same |
 | Market order fill | 274 ns (3.65M/sec) | same |
@@ -49,7 +49,7 @@ Apple M4 Pro (14 cores), 48 GB RAM, macOS arm64, Apple clang, `-DCMAKE_BUILD_TYP
 | Unit tests | 58 passing | `./build/tests` |
 | Sample tape replay | 51 events, 30 trades, 47 risk checks | `./build/run_replay data/sample_tape.csv` |
 
-Throughput and latency are measured separately and neither is derived from the other. Phase 1 of `bench_throughput` runs a mixed workload (35% passive buy, 35% passive sell, 20% cancel, 10% IOC cross, resting depth capped at 50,000 orders) with no instrumentation and divides the operation count by one wall-clock reading over the whole run. Phase 2 replays the identical operation sequence with two clock reads per operation into an HdrHistogram; that instrumentation costs about 12% of the rate, which is why the two are reported apart.
+Throughput and latency are measured separately and neither is derived from the other. Phase 1 of `bench_throughput` runs a mixed workload (35% passive buy, 35% passive sell, 20% cancel, 10% IOC cross, resting depth capped at 50,000 orders) with no instrumentation and divides the operation count by one wall-clock reading over the whole run. Phase 2 replays the identical operation sequence with two clock reads per operation into an HdrHistogram; that instrumentation cost 11% of the rate in the first run and 14% in the second (`results/throughput.txt`, `results/throughput_run2.txt`), which is why the two are reported apart. Phase 1 varied by 12% between the two runs on an otherwise idle machine, so treat the throughput figure as a magnitude rather than a rank.
 
 `BM_MultiLevelSweep` carries a roughly 12 µs constant offset from Google Benchmark's per-iteration timer pause, which excludes book setup from the timed region. Only the slope across level counts is meaningful, hence the marginal figure above.
 
@@ -77,7 +77,7 @@ CMake fetches GoogleTest, Google Benchmark, and HdrHistogram_c at configure time
 - `Price` is a `double`. Production engines use scaled integers, because binary floating point cannot represent decimal tick sizes exactly and repeated arithmetic drifts. The `Price` alias exists so this is a one-line change.
 - A single mutex serialises the whole engine, so the thread-per-connection server does not scale with connection count. The standard fix is a lock-free queue feeding a single-threaded matching loop.
 - The wire protocol writes native byte order and native `double` representation, so a client and server on different architectures would disagree. It is exercised only same-host.
-- The 277 µs maximum latency is roughly 3,300x the median. The tail comes from allocator growth, page faults, and OS scheduling; nothing here is preallocated against a tail-latency target, and there is no huge-page or thread-pinning work.
+- The maximum latency (277 µs and 248 µs in the two runs) is roughly 3,000x the median. The tail comes from allocator growth, page faults, and OS scheduling; nothing here is preallocated against a tail-latency target, and there is no huge-page or thread-pinning work.
 - A p50 of 83 ns is near the granularity of `steady_clock` on this host, which is why the histogram minimum reads 0 ns. Percentiles below roughly 100 ns should be read as approximate.
 - Only the simulation's price walk is seeded. Each agent seeds its RNG from `std::random_device`, so trade counts vary run to run (13,760 and 13,919 across two runs here). The replay harness, not the simulation, is the deterministic path.
 - The matching engine validates only quantity and price. Self-trade prevention, price bands, and lot sizes are not implemented.
@@ -96,7 +96,7 @@ src/                 Implementations, mirrors include/
 tests/               58 GoogleTest cases across 8 suites
 benchmarks/          Per-operation microbenchmarks; sustained-throughput harness
 tools/               print_sizes, risk_gate_smoke.py
-results/             Committed output of every number quoted above
+results/             Committed output of every number quoted above, two throughput runs
 data/                51-event sample tape
 ```
 

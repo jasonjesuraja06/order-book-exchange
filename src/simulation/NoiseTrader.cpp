@@ -14,7 +14,7 @@ NoiseTrader::NoiseTrader(MatchingEngine& engine, const std::string& symbol,
 {}
 
 void NoiseTrader::on_tick(uint64_t tick_num) {
-    // Roll the dice — do we trade this tick?
+    // Decide whether this tick produces an order at all.
     if (random_double(0.0, 1.0) > trade_probability_) return;
 
     // Random side: 50/50 buy or sell
@@ -34,7 +34,7 @@ void NoiseTrader::on_tick(uint64_t tick_num) {
 
         send_order(side, OrderType::Limit, price, qty);
     } else {
-        // Market order — immediate execution at best available price
+        // Market order, immediate execution at best available price
         send_order(side, OrderType::Market, 0.0, qty);
     }
 }

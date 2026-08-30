@@ -99,7 +99,7 @@ ReplayResult ReplayHarness::replay(const std::string& csv_path) {
         volume_running   += t.quantity;
         notional_running += t.price * static_cast<double>(t.quantity);
         if (risk_) {
-            // record both legs (buy + sell) — RiskChecker tracks net by symbol
+            // record both legs (buy + sell), RiskChecker tracks net by symbol
             // We don't know symbol from Trade struct directly; harness ignores
             // for simplicity in this implementation.
             (void)risk_;

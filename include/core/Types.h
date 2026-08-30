@@ -18,15 +18,15 @@ namespace exchange {
 using OrderId   = uint64_t;   // Unique ID for each order (0 to 18 quintillion)
 using Price     = double;      // Price in dollars (e.g., 150.25)
 using Quantity  = uint32_t;    // Number of shares (0 to ~4 billion)
-using Timestamp = uint64_t;    // Nanoseconds since epoch — for latency measurement
+using Timestamp = uint64_t;    // Nanoseconds since epoch, for latency measurement
 
 // ============================================================
-// ENUMS — the "vocabulary" of our exchange
+// ENUMS: the vocabulary shared by every component
 // ============================================================
 
 enum class Side : uint8_t {
-    Buy,   // "Bid" in market terminology — wants to purchase shares
-    Sell   // "Ask" / "Offer" — wants to sell shares
+    Buy,   // "Bid" in market terminology, wants to purchase shares
+    Sell   // "Ask" / "Offer", wants to sell shares
 };
 
 enum class OrderType : uint8_t {
@@ -39,11 +39,11 @@ enum class OrderType : uint8_t {
 // Terminal or resting state reported for every handled order.
 enum class OrderStatus : uint8_t {
     Accepted,        // Order received and placed on the book (no immediate match)
-    Filled,          // Order fully matched — you got all the shares you wanted
+    Filled,          // Order fully matched, no remaining quantity
     PartiallyFilled, // Some shares matched, rest still on the book (Limit)
                      // or rest cancelled (IOC)
     Cancelled,       // Order was cancelled (either by user or IOC remainder)
-    Rejected         // Invalid order — bad price, zero quantity, etc.
+    Rejected         // Invalid order, bad price, zero quantity, etc.
 };
 
 // Monotonic nanosecond timestamp. steady_clock rather than

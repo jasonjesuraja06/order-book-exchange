@@ -1,0 +1,25 @@
+# Host: Apple M4 Pro (14 cores), 48 GB RAM, macOS arm64, Apple clang, -O3
+# Command: ./build/bench_throughput 5000000
+# Second run of the same command as results/throughput.txt, recorded to show run-to-run spread.
+
+workload            : 5000000 operations (35% passive buy, 35% passive sell, 20% cancel, 10% IOC cross)
+
+[phase 1] sustained throughput (no per-op instrumentation)
+  wall clock        : 0.496 s
+  operations        : 5000000
+  throughput        : 10080810 ops/sec (10.08M ops/sec)
+  orders submitted  : 2774893
+  cancels           : 758476
+  trades            : 1499355
+  shares traded     : 149935500
+
+[phase 2] latency distribution (two clock reads per op)
+  samples           : 5000000
+  min               : 0 ns
+  p50               : 83 ns
+  p90               : 292 ns
+  p99               : 459 ns
+  p99.9             : 500 ns
+  max               : 247679 ns
+  mean              : 96.4 ns
+  instrumented rate : 8.72M ops/sec (lower than phase 1 by the cost of timestamping)

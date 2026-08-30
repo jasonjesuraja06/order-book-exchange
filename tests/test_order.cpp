@@ -1,5 +1,5 @@
 // ============================================================
-// ORDER TESTS — Validate the basic building block
+// ORDER TESTS: Validate the basic building block
 // ============================================================
 // Google Test basics:
 // - TEST(GroupName, TestName) defines a test case

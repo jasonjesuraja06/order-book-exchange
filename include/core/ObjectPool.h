@@ -7,7 +7,7 @@
 namespace exchange {
 
 // ============================================================
-// OBJECT POOL — pre-allocated storage for hot-path objects
+// OBJECT POOL: pre-allocated storage for hot-path objects
 // ============================================================
 //
 // The matching path creates and destroys an Order for every message.
