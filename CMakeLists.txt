@@ -31,11 +31,17 @@ add_library(exchange_simulation STATIC
     src/simulation/NoiseTrader.cpp
     src/simulation/Simulation.cpp
 )
+# Declared so CMake orders the archives correctly. GNU ld resolves static
+# libraries in command-line order and will not go back for a symbol it has
+# already passed; Apple's linker is not order-sensitive, so a missing
+# dependency here links locally on macOS and fails on Linux.
+target_link_libraries(exchange_simulation PUBLIC exchange_core)
 
 # ---------- Risk Library ----------
 add_library(exchange_risk STATIC
     src/risk/RiskChecker.cpp
 )
+target_link_libraries(exchange_risk PUBLIC exchange_core)
 
 # ---------- Third-party: HdrHistogram_c (latency histograms) ----------
 include(FetchContent)
