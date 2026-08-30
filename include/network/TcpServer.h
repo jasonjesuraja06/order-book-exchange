@@ -10,36 +10,31 @@
 #include <netinet/in.h>
 
 namespace exchange {
+namespace risk { class RiskChecker; }
 
 // ============================================================
-// TCP SERVER — Network layer for the exchange
+// TCP SERVER — network front end for the matching engine
 // ============================================================
 //
-// This is what turns our matching engine from a library into a
-// real exchange. Clients (trading bots, humans) connect over TCP,
-// send order messages, and receive execution reports back.
+// The main thread runs the accept loop; each accepted connection gets
+// its own thread that reads fixed-size binary messages, applies the
+// pre-trade risk check, forwards surviving orders to the matching
+// engine, and writes an execution report back on the same socket.
 //
-// TCP vs UDP:
-// Real exchanges use BOTH. TCP for order submission (guaranteed
-// delivery — you can't lose an order). UDP multicast for market
-// data broadcast (faster, one-to-many, but packets can be lost).
-// We use TCP for everything since this is a simulation.
+// Thread-per-connection is chosen for clarity, not scale. An event
+// loop over epoll/kqueue is what this would need past a few thousand
+// concurrent clients.
 //
-// ARCHITECTURE:
-// 1. Main thread listens for new connections (accept loop)
-// 2. Each client gets its own thread for reading messages
-// 3. Messages are forwarded to the matching engine
-// 4. Responses are sent back to the client on the same connection
-//
-// In a real exchange, you'd use epoll/kqueue (event-driven I/O)
-// instead of thread-per-client. Thread-per-client is simpler to
-// understand but doesn't scale past ~10K connections. For our
-// simulation with 3-5 bots, it's perfectly fine.
+// If a RiskChecker is supplied, every NewOrder message is checked
+// before the engine sees it, and a failing check is answered with a
+// Rejected execution report instead of reaching the book. Passing
+// nullptr disables the pre-trade layer.
 // ============================================================
 
 class TcpServer {
 public:
-    TcpServer(MatchingEngine& engine, uint16_t port = 9876);
+    TcpServer(MatchingEngine& engine, uint16_t port = 9876,
+              risk::RiskChecker* risk = nullptr);
     ~TcpServer();
 
     // Start listening for connections (blocking — runs forever)
@@ -56,13 +51,13 @@ public:
 private:
     MatchingEngine& engine_;
     uint16_t port_;
+    risk::RiskChecker* risk_ = nullptr;  // optional pre-trade gate
 
     int server_fd_ = -1;              // The listening socket file descriptor
     std::atomic<bool> running_{false}; // Thread-safe flag for shutdown
     std::vector<std::thread> client_threads_;
 
-    // Handle a single client connection.
-    // Reads messages in a loop, forwards to engine, sends responses.
+    // Read messages from one connection until it closes.
     void handle_client(int client_fd);
 };
 

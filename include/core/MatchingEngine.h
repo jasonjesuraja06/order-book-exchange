@@ -52,16 +52,15 @@ namespace exchange {
 //     Trade 2: BUY matched BOB's SELL, 20 shares @ $100
 //
 // THREAD SAFETY:
-// The matching engine uses a mutex to ensure only one order is
-// processed at a time. In a real exchange, you'd use a lock-free
-// queue feeding a single-threaded matching loop (no locks needed
-// because only one thread touches the book). We use a mutex for
-// clarity but note this in interviews.
+// A single mutex serialises order processing, so the engine is safe
+// to call from the server's per-connection threads but does not scale
+// with them. The standard alternative is a lock-free queue feeding a
+// single-threaded matching loop, where no lock is needed because only
+// one thread ever touches the book.
 // ============================================================
 
-// Callback type for trade notifications.
-// When a trade happens, the engine calls this function so that
-// external systems (logging, P&L tracking, network layer) can react.
+// Invoked synchronously on the submitting thread for every trade, so
+// logging, P&L, and risk position updates all observe it in order.
 using TradeCallback = std::function<void(const Trade&)>;
 
 // Stats that the matching engine tracks for benchmarking.
@@ -115,14 +114,9 @@ public:
     void reset_stats() { stats_ = EngineStats{}; }
 
 private:
-    // One order book per symbol (e.g., "AAPL" -> its order book)
-    // unordered_map gives O(1) lookup by symbol name.
     std::unordered_map<std::string, OrderBook> books_;
 
-    // Mutex for thread safety — only one order processed at a time.
-    // In a real low-latency system, you'd use a lock-free SPSC
-    // (single-producer single-consumer) queue instead.
-    std::mutex mutex_;
+    std::mutex mutex_;  // serialises all order processing
 
     // Called on every trade
     TradeCallback trade_callback_;

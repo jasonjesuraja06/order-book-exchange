@@ -1,0 +1,25 @@
+# Host: Apple M4 Pro (14 cores), 48 GB RAM, macOS arm64, Apple clang, -O3
+# Command: ./build/benchmarks --benchmark_min_time=1s
+
+Unable to determine clock rate from sysctl: hw.cpufrequency: No such file or directory
+This does not affect benchmark measurements, only the metadata output.
+***WARNING*** Failed to set thread affinity. Estimated CPU frequency may be incorrect.
+2026-08-29T19:57:24-04:00
+Running ./build/benchmarks
+Run on (14 X 24 MHz CPU s)
+CPU Caches:
+  L1 Data 64 KiB
+  L1 Instruction 128 KiB
+  L2 Unified 4096 KiB (x14)
+Load Average: 2.43, 2.66, 2.51
+----------------------------------------------------------------------------------
+Benchmark                        Time             CPU   Iterations UserCounters...
+----------------------------------------------------------------------------------
+BM_LimitOrderInsert           86.7 ns         86.7 ns     16378062 items_per_second=11.5323M/s
+BM_LimitOrderMatch             260 ns          260 ns      5482048 items_per_second=7.70514M/s
+BM_MarketOrderFill             274 ns          274 ns      5176558 items_per_second=3.65243M/s
+BM_CancelOrder                47.9 ns         47.9 ns     29354905 items_per_second=20.8893M/s
+BM_MultiLevelSweep/1         11929 ns        11913 ns       117587 items_per_second=83.939k/s
+BM_MultiLevelSweep/10        12544 ns        12538 ns       111759 items_per_second=79.7574k/s
+BM_MultiLevelSweep/100       18217 ns        18200 ns        79018 items_per_second=54.9439k/s
+BM_MultiLevelSweep/1000      84919 ns        84905 ns        16401 items_per_second=11.7778k/s

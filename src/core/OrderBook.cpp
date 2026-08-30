@@ -96,14 +96,13 @@ bool OrderBook::cancel_order(OrderId order_id) {
 }
 
 // ============================================================
-// REDUCE ORDER — Decrease quantity without losing time priority
+// REDUCE ORDER — shrink quantity while holding queue position
 // ============================================================
-// In real exchanges, you can reduce your order size without
-// losing your place in the queue. But increasing size or changing
-// price = cancel + new order (you go to the back of the line).
-//
-// This is a nice-to-have feature that shows you understand
-// exchange semantics beyond basic matching.
+// Exchange convention: reducing displayed quantity keeps the order's
+// place in the FIFO queue at its level, because it takes liquidity
+// away from the book and disadvantages nobody behind it. Increasing
+// quantity or changing price does not, and is implemented as a cancel
+// followed by a new order, which goes to the back of the queue.
 // ============================================================
 bool OrderBook::reduce_order(OrderId order_id, Quantity new_quantity) {
     auto it = order_lookup_.find(order_id);

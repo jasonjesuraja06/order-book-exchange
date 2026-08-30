@@ -11,23 +11,15 @@ namespace exchange {
 // BINARY PROTOCOL — How clients talk to the exchange
 // ============================================================
 //
-// WHY BINARY INSTEAD OF JSON/TEXT?
-// JSON: {"type":"limit","side":"buy","price":150.00,"qty":100}
-//       = ~55 bytes, requires parsing (slow)
+// Fixed-size packed messages, each led by a 1-byte type tag, so the
+// socket layer reads a known number of bytes and casts rather than
+// parsing. The equivalent text encoding of a new order is roughly
+// 55 bytes of JSON plus a parse step; this is 23 bytes and none.
 //
-// Binary: [1][0][0x4062C00000000000][0x00000064]
-//         = 22 bytes, no parsing needed (fast)
-//
-// At quant firms, the wire protocol is ALWAYS binary. FIX protocol
-// (used by most exchanges) is tag-value text, but even FIX is being
-// replaced by binary protocols like SBE (Simple Binary Encoding)
-// and ITCH (NASDAQ's native format).
-//
-// Our protocol is simple:
-// - Fixed-size messages (no variable-length parsing needed)
-// - Each message type has a 1-byte header identifying its type
-// - Fields are in network byte order (big-endian) for portability
-//   (though we skip endian conversion for simplicity in this project)
+// PORTABILITY LIMIT: fields are written in the host's native byte
+// order and native double representation. That is fine for a client
+// and server on the same machine, which is how this is exercised, and
+// would need explicit endian conversion to run across architectures.
 //
 // MESSAGE TYPES:
 // 1. OrderMessage      — Client -> Exchange: "submit this order"
@@ -48,15 +40,9 @@ enum class MessageType : uint8_t {
 // ============================================================
 // "I want to buy/sell X shares of SYMBOL at PRICE"
 //
-// PACKED STRUCT:
-// #pragma pack(push, 1) tells the compiler: "don't add any padding
-// between fields." Normally the compiler adds padding bytes to align
-// fields to their natural boundaries (e.g., doubles to 8-byte boundaries).
-// Padding is good for CPU performance but bad for network protocols
-// because the receiver doesn't know where your padding is.
-//
-// With packing, sizeof(OrderMessage) = exactly the sum of all field sizes.
-// We can read/write it directly to/from a socket with one call.
+// #pragma pack(push, 1) suppresses alignment padding, so the struct
+// size is exactly the sum of its fields and the layout is the same on
+// both ends of the socket. Sizes are verified by tools/print_sizes.cpp.
 // ============================================================
 #pragma pack(push, 1)
 

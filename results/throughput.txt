@@ -1,0 +1,26 @@
+# Host: Apple M4 Pro (14 cores), 48 GB RAM, macOS arm64, Apple clang, -O3
+# Command: ./build/bench_throughput 5000000 results/latency_distribution.csv
+
+workload            : 5000000 operations (35% passive buy, 35% passive sell, 20% cancel, 10% IOC cross)
+
+[phase 1] sustained throughput (no per-op instrumentation)
+  wall clock        : 0.555 s
+  operations        : 5000000
+  throughput        : 9010894 ops/sec (9.01M ops/sec)
+  orders submitted  : 2774893
+  cancels           : 758476
+  trades            : 1499355
+  shares traded     : 149935500
+
+[phase 2] latency distribution (two clock reads per op)
+  samples           : 5000000
+  min               : 0 ns
+  p50               : 83 ns
+  p90               : 333 ns
+  p99               : 500 ns
+  p99.9             : 583 ns
+  max               : 276991 ns
+  mean              : 105.0 ns
+  instrumented rate : 8.03M ops/sec (lower than phase 1 by the cost of timestamping)
+
+full distribution written to results/latency_distribution.csv

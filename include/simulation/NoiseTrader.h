@@ -8,29 +8,14 @@ namespace exchange {
 // NOISE TRADER — Random order flow (the "background noise")
 // ============================================================
 //
-// WHY NOISE MATTERS (ELI5):
-// In a real market, there are millions of participants with
-// different time horizons, strategies, and reasons to trade.
-// A retiree selling to fund their vacation. A mutual fund
-// rebalancing quarterly. An employee exercising stock options.
+// Uncorrelated order flow standing in for participants who trade for
+// reasons unrelated to price prediction. Its purpose is to keep the
+// other two agents from trading only against each other, which would
+// produce a degenerate and highly predictable book.
 //
-// None of these people are trying to "beat the market" — they're
-// just trading for their own reasons. This creates random-looking
-// order flow that provides LIQUIDITY (something for market makers
-// and momentum traders to trade against).
-//
-// Without noise traders in our simulation, the market maker and
-// momentum trader would only trade with each other, creating
-// unrealistic, predictable patterns.
-//
-// STRATEGY:
-// Every tick, with some probability:
-// 1. Flip a coin → buy or sell
-// 2. Pick a random quantity
-// 3. Pick a random order type (70% limit near mid, 30% market)
-// 4. Submit the order
-//
-// This simulates the "retail flow" that real exchanges see.
+// Per tick, with a fixed probability: pick a side at random, a random
+// quantity, and a random type (limit near the reference price, or
+// market), then submit.
 // ============================================================
 
 class NoiseTrader : public Trader {

@@ -8,39 +8,17 @@ namespace exchange {
 // MARKET MAKER — Provides liquidity by quoting both sides
 // ============================================================
 //
-// WHAT MARKET MAKERS DO (ELI5):
-// Imagine you're at a currency exchange booth at an airport.
-// The booth says: "We buy euros at $1.08, we sell euros at $1.12"
-// That $0.04 gap is the "spread" — the booth's profit.
+// Quotes both sides around a fair value estimate, earning the spread
+// when both quotes fill and carrying directional risk whenever they
+// do not. Inventory is the exposure that has to be managed: a filled
+// bid leaves the maker long, and a subsequent adverse price move is a
+// loss against that position.
 //
-// Market makers do this for stocks. They simultaneously offer to:
-//   BUY at $99.95 (the bid)  — slightly below fair value
-//   SELL at $100.05 (the ask) — slightly above fair value
-//
-// If someone buys from them at $100.05 and someone else sells to
-// them at $99.95, they make $0.10 per share without taking any
-// directional risk. This is called "capturing the spread."
-//
-// THE RISK:
-// If the stock price moves against you before the other side fills,
-// you lose money. Example: you buy at $99.95, then the price drops
-// to $98.00 — you're down $1.95/share. Market makers manage this
-// by:
-// 1. Keeping positions small (cancel and re-quote frequently)
-// 2. Widening the spread when volatility increases
-// 3. Skewing quotes when they have too much inventory
-//
-// THIS IS LITERALLY WHAT JANE STREET AND CITADEL SECURITIES DO.
-// If an interviewer asks "do you understand market making?", you
-// can walk them through this code.
-//
-// STRATEGY:
-// Every tick, the market maker:
-// 1. Cancels all existing quotes (stale prices = risk)
-// 2. Calculates a fair value estimate
-// 3. Places new bid and ask quotes around fair value
-// 4. Adjusts the spread based on inventory risk
-//    (if holding too many shares, lower the ask to sell faster)
+// Per tick the agent cancels its outstanding quotes, since a stale
+// quote is an option written to the rest of the market, then re-quotes
+// a bid and an ask around fair value with the spread skewed against
+// its current inventory so the side that reduces the position is more
+// likely to fill.
 // ============================================================
 
 class MarketMaker : public Trader {

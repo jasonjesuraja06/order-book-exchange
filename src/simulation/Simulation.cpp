@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <cmath>
 #include <random>
+#include <chrono>
 
 namespace exchange {
 
@@ -11,9 +12,8 @@ Simulation::Simulation(const SimulationConfig& config)
     : config_(config)
     , true_price_(config.initial_price)
 {
-    // Create the trading bots.
-    // Each bot gets a reference to the same matching engine.
-    // This is how they interact — all orders go through one engine.
+    // All agents share one matching engine; that shared book is the
+    // only channel through which they interact.
     market_maker_ = std::make_unique<MarketMaker>(
         engine_, config_.symbol, config_.initial_price);
 
@@ -26,9 +26,8 @@ Simulation::Simulation(const SimulationConfig& config)
             std::make_unique<NoiseTrader>(engine_, config_.symbol));
     }
 
-    // Wire up order ownership tracking.
-    // Every time a bot submits an order, we record which bot owns it.
-    // When a trade fires, we look up both sides and call on_fill().
+    // Record which agent submitted each order so fills can be routed
+    // back to both sides of a trade.
     auto register_order = [this](OrderId id, Trader* trader) {
         order_owner_[id] = trader;
     };
@@ -41,45 +40,28 @@ Simulation::Simulation(const SimulationConfig& config)
 }
 
 // ============================================================
-// RUN — The main simulation loop
+// RUN — main simulation loop
 // ============================================================
-// Here's what happens every tick:
+// Per tick: random-walk the reference price, push it to the agents,
+// let each agent act (orders are matched synchronously), and record
+// the resulting trades.
 //
-// 1. RANDOM WALK the true price (simulates real market movement)
-//    Each tick, the price changes by a small random amount.
-//    This is the "Geometric Brownian Motion" model — the same
-//    math behind the Black-Scholes options pricing formula.
-//    Simple version: new_price = old_price * (1 + random_normal)
-//
-// 2. UPDATE each bot's view of the market
-//    - Market maker gets the new "fair value"
-//    - Momentum trader gets the latest trade price
-//    - Noise traders get an approximate reference price
-//
-// 3. LET each bot act (call on_tick())
-//    Each bot looks at the market and submits/cancels orders.
-//    The matching engine processes them immediately.
-//
-// 4. RECORD any trades that happened this tick
+// The loop is bracketed by a steady_clock reading so throughput can be
+// reported as operations divided by elapsed wall-clock seconds.
 // ============================================================
 SimulationResults Simulation::run() {
     // Random number generator for the price random walk
-    std::mt19937 rng(42);  // Fixed seed = reproducible results
+    // Seeds only the price walk. Each agent seeds its own RNG from
+    // std::random_device, so a run is not reproducible end to end.
+    std::mt19937 rng(42);
     // Normal distribution with mean=0, stddev=volatility
     // This means each tick, the price moves ~0.1% on average
     std::normal_distribution<double> price_dist(0.0, config_.price_volatility);
 
-    // Register a trade callback so we can log every trade
-    // and notify the bots about their fills.
-    //
-    // Lambda capture explained:
-    // [this] means "this lambda can access the Simulation's member variables"
-    // (const Trade& trade) is the parameter — the trade that just happened
+    // Log every trade and route the fill to both counterparties.
     engine_.set_trade_callback([this](const Trade& trade) {
         trade_log_.push_back(trade);
 
-        // Route fills to the correct traders using the ownership map.
-        // Each trade has a buyer and seller — notify both.
         auto buy_it = order_owner_.find(trade.buy_order_id);
         if (buy_it != order_owner_.end()) {
             buy_it->second->on_fill(Side::Buy, trade.price, trade.quantity);
@@ -90,7 +72,7 @@ SimulationResults Simulation::run() {
             sell_it->second->on_fill(Side::Sell, trade.price, trade.quantity);
         }
 
-        // Momentum trader also tracks the last trade price for SMA
+        // The momentum trader's SMA is fed from executed prices.
         momentum_trader_->update_price(trade.price);
     });
 
@@ -101,36 +83,30 @@ SimulationResults Simulation::run() {
     std::cout << std::string(60, '-') << "\n";
 
     // ---- MAIN LOOP ----
+    const auto wall_start = std::chrono::steady_clock::now();
+
     for (uint64_t tick = 0; tick < config_.num_ticks; tick++) {
-        // Step 1: Random walk the true price
-        // Geometric Brownian Motion: dS/S = μdt + σdW
-        // We set μ=0 (no drift) so the price is a pure random walk.
-        // The price_dist gives us σdW (random shock).
+        // Geometric Brownian Motion with zero drift: dS/S = sigma dW.
         double return_pct = price_dist(rng);
         true_price_ *= (1.0 + return_pct);
 
-        // Ensure price stays positive (can't have negative stock prices)
         true_price_ = std::max(true_price_, 0.01);
 
-        // Step 2: Update bot price views
         market_maker_->set_fair_value(true_price_);
         for (auto& noise : noise_traders_) {
             noise->set_reference_price(true_price_);
         }
 
-        // Initialize momentum trader's price history
         if (tick == 0) {
             momentum_trader_->update_price(true_price_);
         }
 
-        // Step 3: Let each bot act
         market_maker_->on_tick(tick);
         momentum_trader_->on_tick(tick);
         for (auto& noise : noise_traders_) {
             noise->on_tick(tick);
         }
 
-        // Progress update every 10% of simulation
         if (tick > 0 && tick % (config_.num_ticks / 10) == 0) {
             double pct = 100.0 * tick / config_.num_ticks;
             std::cout << "  " << std::setw(3) << static_cast<int>(pct) << "% complete | "
@@ -140,6 +116,10 @@ SimulationResults Simulation::run() {
         }
     }
 
+    const auto wall_end = std::chrono::steady_clock::now();
+    const double wall_sec =
+        std::chrono::duration<double>(wall_end - wall_start).count();
+
     std::cout << "  100% complete\n";
     std::cout << std::string(60, '-') << "\n";
 
@@ -148,6 +128,9 @@ SimulationResults Simulation::run() {
 
     SimulationResults results;
     results.total_ticks = config_.num_ticks;
+    results.total_orders = stats.total_orders;
+    results.total_cancels = stats.total_cancels;
+    results.wall_clock_sec = wall_sec;
     results.total_trades = stats.total_trades;
     results.total_volume = stats.total_volume;
     results.total_notional = stats.total_notional;
@@ -158,7 +141,6 @@ SimulationResults Simulation::run() {
     results.price_return_pct = ((true_price_ - config_.initial_price)
                                  / config_.initial_price) * 100.0;
 
-    // Collect per-trader stats
     auto add_trader_result = [&](const Trader& trader) {
         SimulationResults::TraderResult tr;
         tr.name = trader.name();
@@ -227,13 +209,20 @@ void Simulation::print_results(const SimulationResults& results) {
 
     std::cout << "╚══════════════════════════════════════════════╝\n";
 
-    // Throughput calculation
-    if (results.avg_latency_ns > 0) {
-        double orders_per_sec = 1e9 / results.avg_latency_ns;
-        std::cout << "\nThroughput: ~" << std::fixed << std::setprecision(0)
-                  << orders_per_sec << " orders/sec ("
-                  << std::setprecision(2) << orders_per_sec / 1e6
-                  << "M orders/sec)\n";
+    // Sustained throughput: operations actually executed divided by the
+    // wall-clock time the tick loop took. Not derived from avg latency.
+    if (results.wall_clock_sec > 0.0) {
+        const uint64_t ops = results.total_orders + results.total_cancels;
+        const double ops_per_sec = ops / results.wall_clock_sec;
+        std::cout << "\nWall clock:  " << std::fixed << std::setprecision(3)
+                  << results.wall_clock_sec << " s\n";
+        std::cout << "Operations:  " << ops << " ("
+                  << results.total_orders << " orders + "
+                  << results.total_cancels << " cancels)\n";
+        std::cout << "Throughput:  " << std::fixed << std::setprecision(0)
+                  << ops_per_sec << " ops/sec ("
+                  << std::setprecision(2) << ops_per_sec / 1e6
+                  << "M ops/sec), measured over the whole run\n";
     }
 }
 

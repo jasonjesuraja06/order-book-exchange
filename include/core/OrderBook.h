@@ -15,46 +15,29 @@ namespace exchange {
 // ORDER BOOK — The central data structure of any exchange
 // ============================================================
 //
-// WHAT IS AN ORDER BOOK?
-// Imagine a whiteboard with two columns:
+// Two sorted sides. Bids descend from the highest price a buyer will
+// pay; asks ascend from the lowest price a seller will accept. The gap
+// between the two best prices is the spread. An incoming buy at or
+// above the best ask crosses and matches; likewise a sell at or below
+// the best bid.
 //
-//   BIDS (buyers)          ASKS (sellers)
-//   $150.00 x 200 shares   $150.05 x 100 shares
-//   $149.95 x 500 shares   $150.10 x 300 shares
-//   $149.90 x 150 shares   $150.25 x 50 shares
+// DATA STRUCTURE CHOICE
+// Three operations have to be cheap: reach the best price level,
+// insert or remove a level, and remove one specific order by ID.
 //
-// The left side (bids) is sorted HIGH to LOW — the best buyer
-// is at the top, offering the highest price.
-// The right side (asks) is sorted LOW to HIGH — the best seller
-// is at the top, offering the lowest price.
+//   std::map<Price, std::list<Order*>>
+//     - price levels kept sorted by the tree
+//     - O(log N) in the number of levels to find or insert a level
+//     - O(1) to reach the best level via begin()/rbegin()
+//     - O(1) append within a level, which is the FIFO time priority
 //
-// The gap between best bid ($150.00) and best ask ($150.05) is
-// the "spread" — $0.05 in this case. Market makers profit from
-// this spread.
+//   std::unordered_map<OrderId, OrderLocation>
+//     - stores the side, price, and list iterator for each live order,
+//       so cancel splices it out in O(1) without scanning the level
 //
-// When a new buy order comes in at $150.05 or higher, it matches
-// against the best ask. When a new sell order comes in at $150.00
-// or lower, it matches against the best bid.
-//
-// DATA STRUCTURE CHOICE:
-// We need two key operations to be fast:
-//   1. Find the best price level — O(1) ideally
-//   2. Insert/remove at a price level — O(log N) is acceptable
-//
-// std::map<Price, list<Order*>> gives us:
-//   - Sorted prices automatically (red-black tree)
-//   - O(log N) insert/find by price
-//   - O(1) access to best price (begin() or rbegin())
-//   - O(1) time-priority within a price level (linked list)
-//
-// For O(1) order cancellation, we also keep an unordered_map from
-// OrderId -> iterator, so we can jump directly to any order.
-//
-// REAL EXCHANGES:
-// Production exchanges (NASDAQ, NYSE) use arrays indexed by price
-// (since prices are discrete ticks) for O(1) everything. We use
-// std::map for clarity, but could swap to an array-based book
-// for even better performance.
+// A production book indexes an array directly by tick, since prices
+// are discrete, and gets O(1) on the level lookup as well. The tree
+// is used here for clarity and because the level count stays small.
 // ============================================================
 
 // A single price level — all orders at the same price, in FIFO order.

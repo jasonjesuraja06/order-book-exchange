@@ -12,25 +12,14 @@
 namespace exchange {
 
 // ============================================================
-// SIMULATION — Orchestrates a full simulated trading day
+// SIMULATION — Drives the agents against one matching engine
 // ============================================================
 //
-// This is the "main loop" that ties everything together:
-// 1. Creates the matching engine and trading bots
-// 2. Runs N ticks (each tick = one time step)
-// 3. On each tick, every bot gets a chance to act
-// 4. Tracks trades, updates prices, records stats
-// 5. At the end, prints a summary (latency, P&L, volume)
-//
-// TICK-BASED vs EVENT-BASED SIMULATION:
-// We use tick-based: fixed time steps, every bot acts each tick.
-// Event-based would be: events trigger callbacks (more realistic
-// but harder to implement). Tick-based is standard for backtesting
-// and academic simulations.
-//
-// A "tick" here is NOT a price tick — it's a simulation time step.
-// With 10,000 ticks representing a 6.5-hour trading day, each tick
-// is about 2.3 seconds of market time.
+// Tick-based rather than event-based: fixed time steps, every agent
+// acts on every tick. A tick is a simulation time step, not a price
+// tick. The loop creates the engine and agents, random-walks a
+// reference price, lets each agent act, and accumulates trade and
+// latency statistics.
 // ============================================================
 
 struct SimulationConfig {
@@ -43,9 +32,17 @@ struct SimulationConfig {
 
 struct SimulationResults {
     uint64_t total_ticks = 0;
+    uint64_t total_orders = 0;
+    uint64_t total_cancels = 0;
     uint64_t total_trades = 0;
     uint64_t total_volume = 0;
     double   total_notional = 0.0;
+
+    // Wall-clock seconds spent inside the tick loop. Throughput is
+    // (total_orders + total_cancels) / wall_clock_sec, measured over the
+    // whole run; it is not derived from the latency figures below.
+    double   wall_clock_sec = 0.0;
+
     double   avg_latency_ns = 0.0;
     double   min_latency_ns = 0.0;
     double   max_latency_ns = 0.0;
@@ -77,24 +74,19 @@ private:
     SimulationConfig config_;
     MatchingEngine engine_;
 
-    // Smart pointers manage bot lifetime automatically.
-    // unique_ptr = "this object is owned by exactly one pointer"
-    // When the Simulation is destroyed, all bots are destroyed too.
     std::unique_ptr<MarketMaker> market_maker_;
     std::unique_ptr<MomentumTrader> momentum_trader_;
     std::vector<std::unique_ptr<NoiseTrader>> noise_traders_;
 
-    // Simulated "true" price that random-walks each tick.
-    // This represents external information flow — earnings, news, etc.
-    // The market maker tracks this; other bots react to market prices.
+    // Reference price that random-walks each tick, standing in for
+    // external information flow. The market maker quotes around it.
     double true_price_;
 
     // Trade log for analysis
     std::vector<Trade> trade_log_;
 
-    // Maps order IDs to the trader that submitted them.
-    // When a trade happens, we look up both order IDs to find
-    // the buyer and seller, then call on_fill() on each.
+    // Order ID to submitting agent. A trade names two order IDs;
+    // both are looked up here so on_fill() reaches the right agents.
     std::unordered_map<OrderId, Trader*> order_owner_;
 };
 

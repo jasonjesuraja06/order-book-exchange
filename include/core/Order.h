@@ -5,28 +5,23 @@
 namespace exchange {
 
 // ============================================================
-// ORDER — A request to buy or sell shares
+// ORDER — a request to buy or sell
 // ============================================================
 //
-// This is the fundamental "message" in any exchange. Every single
-// thing that happens starts with an Order.
+// MEMORY LAYOUT
+// Fields are ordered widest-first and the enums are uint8_t, which
+// packs the 35 bytes of payload into 40 bytes with 8-byte alignment
+// and no interior padding. Measured with tools/print_sizes.cpp:
 //
-// MEMORY LAYOUT MATTERS:
-// At quant firms, they obsess over struct size because:
-// 1. Smaller structs = more fit in CPU cache = faster
-// 2. Cache line = 64 bytes on modern CPUs
-// 3. If your Order is 65 bytes, it spans 2 cache lines = 2x slower to read
+//     sizeof(Order) == 40, alignof(Order) == 8
 //
-// Our Order is ~42 bytes. Two orders fit in one cache line.
-// We achieve this by:
-// - Using uint8_t enums (1 byte each instead of 4)
-// - Ordering fields to minimize padding (alignment gaps)
+// One order therefore fits inside a 64-byte cache line, but two do
+// not (80 > 64). Shrinking further would mean narrowing Price from
+// double to a fixed-point integer, which is the change a production
+// engine would make anyway, for rounding reasons rather than size.
 //
-// STRUCT vs CLASS:
-// In C++, struct and class are identical except struct defaults to public.
-// In finance/systems code, convention is:
-//   struct = plain data (like this)
-//   class  = has behavior/invariants (like OrderBook)
+// tests/test_object_pool.cpp asserts this size so the figure quoted
+// here and in the README cannot drift from the code.
 // ============================================================
 
 struct Order {
@@ -42,10 +37,9 @@ struct Order {
     // Default constructor — creates an empty/invalid order
     Order() = default;
 
-    // The constructor you'll actually use.
-    // We don't take status because new orders are always Accepted.
-    // We don't take remaining_qty because it starts equal to quantity.
-    // We don't take timestamp because it's set to NOW automatically.
+    // status, remaining_qty, and timestamp are derived rather than
+    // passed: a new order is always Accepted, starts fully unfilled,
+    // and is stamped on construction.
     Order(OrderId id, Side side, OrderType type, Price price, Quantity quantity)
         : id(id)
         , price(price)

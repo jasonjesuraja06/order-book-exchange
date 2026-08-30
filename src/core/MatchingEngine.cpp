@@ -24,16 +24,11 @@ void MatchingEngine::set_trade_callback(TradeCallback callback) {
 }
 
 // ============================================================
-// SUBMIT ORDER — Main entry point
+// SUBMIT ORDER — main entry point
 // ============================================================
-// This is where all the magic happens. Let's walk through it:
-//
-// 1. VALIDATE: Reject garbage orders (zero quantity, negative price)
-// 2. MATCH: Try to fill the order against existing orders
-// 3. PLACE: If there's leftover quantity, put it on the book
-//
-// The mutex lock ensures thread safety — only one order at a time.
-// In production, you'd use a single-threaded event loop instead.
+// Validate, match against the opposite side, then rest or cancel the
+// remainder depending on order type. The mutex serialises the whole
+// sequence, so concurrent callers do not interleave within a match.
 // ============================================================
 OrderId MatchingEngine::submit_order(const std::string& symbol, Side side,
                                       OrderType type, Price price,
@@ -41,35 +36,28 @@ OrderId MatchingEngine::submit_order(const std::string& symbol, Side side,
     Timestamp start = now_ns();  // Start the latency timer
 
     std::lock_guard<std::mutex> lock(mutex_);
-    // lock_guard is RAII — it acquires the lock in the constructor
-    // and releases it when it goes out of scope (end of function).
-    // This means the lock is ALWAYS released, even if we throw an
-    // exception. Manual lock/unlock is error-prone — always use RAII.
 
     OrderBook& book = get_order_book(symbol);
     stats_.total_orders++;
 
     // ---- VALIDATION ----
-    // Reject orders that don't make sense.
-    // In a real exchange, there are dozens more checks (self-trade
-    // prevention, price bands, lot sizes, etc.)
+    // Structural checks only. Self-trade prevention, price bands, and
+    // lot-size rules are not implemented here; the pre-trade limits
+    // that do exist live in risk::RiskChecker.
     if (quantity == 0) {
         stats_.total_rejects++;
         return 0;  // 0 = invalid order ID
     }
 
-    // Market orders don't specify a price (they take whatever's available).
-    // Limit orders MUST have a positive price.
+    // A limit order must carry a positive price; a market order does not.
     if (type == OrderType::Limit && price <= 0.0) {
         stats_.total_rejects++;
         return 0;
     }
 
-    // ---- CREATE THE ORDER ----
-    // Add it to the book (this gets an object from the pool).
-    // For market orders, we use a special price:
-    //   Market BUY = max possible price (will match any ask)
-    //   Market SELL = 0 (will match any bid)
+    // Market orders are given a price that crosses everything on the
+    // opposite side: +inf for a buy, 0 for a sell. This lets the same
+    // comparison drive matching for all three order types.
     Price effective_price = price;
     if (type == OrderType::Market) {
         effective_price = (side == Side::Buy)
@@ -80,12 +68,8 @@ OrderId MatchingEngine::submit_order(const std::string& symbol, Side side,
     Order* order = book.add_order(side, type, effective_price, quantity);
     OrderId id = order->id;
 
-    // ---- MATCHING ----
-    // Try to fill this order against the opposite side of the book.
-    // match_order() returns all the trades that happened.
     std::vector<Trade> trades = match_order(book, order);
 
-    // Notify external systems about each trade
     for (const Trade& trade : trades) {
         stats_.total_trades++;
         stats_.total_volume += trade.quantity;
@@ -97,30 +81,19 @@ OrderId MatchingEngine::submit_order(const std::string& symbol, Side side,
     }
 
     // ---- POST-MATCH HANDLING ----
-    // What happens to the leftover quantity depends on order type:
-    //
-    // LIMIT: Sits on the book until filled or cancelled.
-    //        Already on the book from add_order(), so nothing to do.
-    //
-    // MARKET: Should NEVER rest on the book. If there weren't enough
-    //         sellers/buyers, the remainder is cancelled.
-    //         (In real life, some exchanges reject unfilled market
-    //         orders; others fill partially. We cancel the remainder.)
-    //
-    // IOC: "Immediate or Cancel" — fill what you can, cancel the rest.
-    //      Same behavior as market for the unfilled portion.
+    // The order was placed on the book before matching, so a fully
+    // filled order is removed here. An unfilled remainder rests only
+    // for a limit order; market and IOC remainders are cancelled,
+    // since neither may sit on the book.
     if (order->is_filled()) {
-        // Fully filled — remove from the book (it was added before matching)
         book.remove_order(order);
     } else if (type == OrderType::Market || type == OrderType::IOC) {
-        // Market/IOC orders should never rest on the book.
-        // Cancel whatever didn't fill.
         order->status = (order->filled_qty() > 0)
             ? OrderStatus::PartiallyFilled
             : OrderStatus::Cancelled;
         book.remove_order(order);
     }
-    // Limit orders with remaining quantity stay on the book (already there)
+    // A limit remainder is already resting; nothing to do.
 
     // ---- RECORD LATENCY ----
     Timestamp end = now_ns();

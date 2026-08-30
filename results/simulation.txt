@@ -1,0 +1,37 @@
+# Host: Apple M4 Pro (14 cores), 48 GB RAM, macOS arm64, Apple clang, -O3
+# Command: ./build/run_simulation
+
+   70% complete | Price: $166.19 | Trades: 9582 | Orders: 21497
+   80% complete | Price: $169.66 | Trades: 10989 | Orders: 24558
+   90% complete | Price: $158.61 | Trades: 12417 | Orders: 27668
+  100% complete
+------------------------------------------------------------
+
+╔══════════════════════════════════════════════╗
+║          SIMULATION RESULTS                 ║
+╠══════════════════════════════════════════════╣
+║ Total Ticks:          10000                 ║
+║ Total Trades:         13760                 ║
+║ Total Volume:        794560 shares          ║
+║ Total Notional:  $129133058.30               ║
+║ Final Price:     $   160.56                ║
+║ Price Return:         7.04%               ║
+╠══════════════════════════════════════════════╣
+║          LATENCY (nanoseconds)              ║
+╠══════════════════════════════════════════════╣
+║ Average:                129 ns              ║
+║ Minimum:                  0 ns              ║
+║ Maximum:             424750 ns              ║
+╠══════════════════════════════════════════════╣
+║          TRADER P&L                         ║
+╠══════════════════════════════════════════════╣
+║ MarketMaker      Pos:  -210 P&L: $  10771.44 ║
+║ MomentumTrader   Pos:     0 P&L: $      0.00 ║
+║ NoiseTrader      Pos:  1140 P&L: $  10701.89 ║
+║ NoiseTrader      Pos:  -510 P&L: $  17006.28 ║
+║ NoiseTrader      Pos: -5100 P&L: $  80700.64 ║
+╚══════════════════════════════════════════════╝
+
+Wall clock:  0.007 s
+Operations:  46756 (30699 orders + 16057 cancels)
+Throughput:  6533628 ops/sec (6.53M ops/sec), measured over the whole run

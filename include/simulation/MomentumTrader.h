@@ -9,28 +9,15 @@ namespace exchange {
 // MOMENTUM TRADER — Follows price trends
 // ============================================================
 //
-// STRATEGY (ELI5):
-// "If the price has been going up, buy. If it's been going down, sell."
+// Trades a simple moving average crossover: track the last N executed
+// prices, and when the latest price sits more than a threshold above
+// the average, buy; more than a threshold below, sell. A cooldown
+// keeps it from re-firing on every tick of the same signal.
 //
-// This is one of the oldest trading strategies in existence.
-// Momentum traders believe that stocks in motion tend to stay in
-// motion (Newton's first law, but for prices).
-//
-// HOW IT WORKS:
-// 1. Track the last N prices (a "moving window")
-// 2. Calculate a simple moving average (SMA)
-// 3. If current price > SMA by a threshold → price is trending UP → BUY
-// 4. If current price < SMA by a threshold → price is trending DOWN → SELL
-//
-// WHY THIS BOT EXISTS IN THE SIMULATION:
-// Momentum traders are the "aggressors" — they cross the spread
-// (pay the market maker's price) because they believe the trend
-// will make up for it. They generate trades. Without them, the
-// market maker would just sit there quoting with no fills.
-//
-// In real markets, momentum strategies can be very profitable
-// but are also the most crowded — many hedge funds and HFT firms
-// run momentum strategies, so the edge has diminished over time.
+// Its role in the simulation is to be the aggressor. It sends market
+// orders that cross the spread, which is what fills the market maker's
+// quotes; without a liquidity taker the maker would quote into an
+// otherwise inert book.
 // ============================================================
 
 class MomentumTrader : public Trader {

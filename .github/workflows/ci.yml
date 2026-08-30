@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run test suite
+        run: ./build/tests
+
+      - name: Print struct and wire sizes
+        run: ./build/print_sizes
+
+      - name: Replay sample tape
+        run: ./build/run_replay data/sample_tape.csv
+
+      - name: Smoke-run the throughput harness
+        run: ./build/bench_throughput 200000

@@ -1,6 +1,4 @@
-// Order is a simple struct — all logic is in the header (inline).
-// This .cpp exists so CMake has something to compile for the library.
-// In production codebases, you'd put serialization, validation,
-// or logging methods here.
+// Order is a plain struct with all of its logic inline in the header.
+// This translation unit exists to give the core library a compiland.
 
 #include "core/Order.h"

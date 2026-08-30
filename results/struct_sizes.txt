@@ -1,0 +1,9 @@
+# Host: Apple M4 Pro (14 cores), 48 GB RAM, macOS arm64, Apple clang, -O3
+# Command: ./build/print_sizes
+
+sizeof(Order)            = 40 bytes (alignof 8)
+sizeof(Trade)            = 40 bytes
+Orders per 64-byte line  = 1
+sizeof(OrderMessage)     = 23 bytes
+sizeof(CancelMessage)    = 17 bytes
+sizeof(ExecutionReport)  = 26 bytes

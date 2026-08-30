@@ -64,6 +64,8 @@ add_library(exchange_replay STATIC
 )
 target_link_libraries(exchange_replay PUBLIC exchange_core exchange_risk exchange_metrics)
 
+target_link_libraries(exchange_network PUBLIC exchange_core exchange_risk)
+
 # ---------- Main Exchange Executable ----------
 add_executable(exchange src/main.cpp)
 target_link_libraries(exchange
@@ -91,6 +93,7 @@ enable_testing()
 
 add_executable(tests
     tests/test_order.cpp
+    tests/test_object_pool.cpp
     tests/test_orderbook.cpp
     tests/test_matching_engine.cpp
     tests/test_risk_checker.cpp
@@ -118,3 +121,13 @@ add_executable(benchmarks
 )
 target_link_libraries(benchmarks
     exchange_core exchange_metrics benchmark::benchmark)
+
+add_executable(bench_throughput
+    benchmarks/bench_throughput.cpp
+)
+target_link_libraries(bench_throughput
+    exchange_core exchange_metrics)
+
+# ---------- Struct/wire size probe ----------
+add_executable(print_sizes tools/print_sizes.cpp)
+target_link_libraries(print_sizes exchange_core)

@@ -1,0 +1,25 @@
+# Host: Apple M4 Pro (14 cores), 48 GB RAM, macOS arm64, Apple clang, -O3
+# Command: ./build/run_replay data/sample_tape.csv
+
+============================================================
+ Replaying tape: data/sample_tape.csv
+============================================================
+
+--- Replay Results ---
+  Events processed: 51
+  New orders:       47
+  Cancels:          4
+  Risk rejections:  0
+  Trades generated: 30
+  Volume traded:    6135 shares
+  Notional traded:  $1.1019e+06
+  Duration:         892 µs
+  Throughput:       57116 ops/sec
+
+--- Latency Distribution (nanoseconds) ---
+  Per-op latency:  count=51  min=42  mean=16671.1  p50=250  p90=750  p99=415743  p99.9=419071  max=419071
+
+--- Risk Stats ---
+  Total checks:     47
+  Passes:           47
+  Rejections:       0

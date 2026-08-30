@@ -1,244 +1,105 @@
 # Limit Order Book Exchange
 
-> A high-performance exchange and matching engine in **C++17** with price-time priority order matching, a multi-threaded TCP server, and a full trading simulation. **3.6M orders/sec end-to-end at 262 ns average match latency** on a single core.
+A price-time priority matching engine in C++17 with a pre-trade risk layer, a binary TCP front end, a deterministic tape-replay harness, and an agent-based market simulation.
 
-![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)
-![CMake](https://img.shields.io/badge/CMake-3.20%2B-green.svg)
-![Tests](https://img.shields.io/badge/tests-53%2F53%20passing-success.svg)
-![Benchmarks](https://img.shields.io/badge/benchmarks-Google%20Benchmark-orange.svg)
-![Latency](https://img.shields.io/badge/p99%20latency-HdrHistogram-orange.svg)
-![License](https://img.shields.io/badge/License-MIT-green.svg)
+[![CI](https://github.com/jasonjesuraja06/order-book-exchange/actions/workflows/ci.yml/badge.svg)](https://github.com/jasonjesuraja06/order-book-exchange/actions/workflows/ci.yml)
 
-## Performance
+## Correctness first
 
-Benchmarked on Apple M3 Pro using Google Benchmark.
+58 GoogleTest cases assert observable behavior rather than smoke-testing. They check the exact order IDs chosen by time priority at a shared price level, the per-level execution prices of a multi-level sweep, that an IOC remainder is cancelled instead of rested, each `RiskChecker` reject reason against its limit, and an end-to-end tape replay against expected trade output. Run them with `./build/tests`.
 
-| Metric | Value |
-|---|---|
-| **End-to-end simulation throughput** | **3.6M orders/sec** |
-| **Average match latency** | **262 ns** |
-| **Minimum match latency** | 41 ns |
-| Order insertion throughput | 8.7M orders/sec |
-| Order matching throughput | 5.8M orders/sec |
-| Order cancellation throughput | 14.9M orders/sec |
-| Simulation trades generated | 14,137 |
-| Simulation notional volume | $132M |
-| Unit tests | 53/53 passing |
+## Why it is built this way
 
-## Highlights
+Matching is a latency problem with a hard correctness constraint: the queue position a participant earned by arriving first has to survive every operation on the book. That pushes toward structures where cancel does not scan. Orders rest in `std::list` FIFO queues under a `std::map` of price levels, and a separate `unordered_map` from order ID to `{side, price, list iterator}` lets a cancel splice an order out in O(1) without walking its level.
 
-- **Price-time (FIFO) priority matching** for limit, market, and IOC orders — the algorithm used by NYSE, NASDAQ, and CME
-- **O(1) cancellation** via a hash-indexed iterator map into per-price-level FIFO queues
-- **Pre-allocated object pool** eliminating heap allocation on the critical matching path, reducing latency variance
-- **Pre-trade risk checks** — kill switch, max order qty / notional, per-symbol position cap, firm-wide notional exposure (the kind of safeguard whose absence cost Knight Capital $440M in 2012)
-- **HdrHistogram latency tracking** — full p50 / p90 / p99 / p99.9 distribution with CSV export, the same library used by LMAX Disruptor, Cassandra, and Aeron
-- **Deterministic tape-replay harness** — feed historical CSV tapes through the engine for regression testing, exactly how production exchanges certify code changes
-- **Multi-threaded TCP server** with a packed binary protocol (23-byte new-order messages, 17-byte cancels)
-- **Full trading simulation** with three agent types: inventory-aware market maker, SMA-crossover momentum trader, and noise traders, driven by geometric Brownian motion
-- **5 Google Benchmark scenarios** (insert, match, market-fill, cancel, multi-level sweep) + **53 Google Test cases** covering core matching, risk module, latency histogram, and replay harness edge cases
+That design hands raw `Order*` to the book and expects them to stay valid for the life of the order, which is what makes the allocator choice load-bearing rather than cosmetic.
 
 ## Architecture
 
 ```
-        ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-        │ Market Maker │  │   Momentum   │  │    Noise     │
-        │     Bot      │  │   Trader     │  │   Traders    │
-        └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-               │                 │                 │
-               └─────────────────┼─────────────────┘
-                                 │ TCP (Binary Protocol)
-                        ┌────────▼────────┐
-                        │   TCP Server    │
-                        │  (Multi-thread) │
-                        └────────┬────────┘
-                                 │
-                        ┌────────▼────────┐
-                        │    Matching     │
-                        │     Engine      │
-                        │  (Price-Time    │
-                        │   Priority)     │
-                        └────────┬────────┘
-                                 │
-                 ┌───────────────┼───────────────┐
-                 │                               │
-          ┌──────▼──────┐                 ┌──────▼──────┐
-          │  Bid Book   │                 │  Ask Book   │
-          │  (Buys)     │                 │  (Sells)    │
-          │ High → Low  │                 │ Low → High  │
-          └─────────────┘                 └─────────────┘
+ clients ──TCP──> TcpServer ──> RiskChecker ──> MatchingEngine ──> OrderBook
+                (thread per       (pre-trade      (mutex, one       (bid/ask maps,
+                 connection)       limits)         order at a time)  FIFO per level)
+                                                         │
+                                        trade callback ──┴──> RiskChecker.on_fill
+                                                               (positions, notional)
+
+ ReplayHarness (CSV tape) ──> RiskChecker ──> MatchingEngine ──> LatencyHistogram
+ Simulation (market maker, momentum, noise) ──> MatchingEngine
 ```
 
-## Getting Started
+Risk runs on two paths: the TCP server checks every `NewOrder` message before the engine sees it, and the replay harness checks every tape event. The in-process `Simulation` agents call the engine directly and are not risk-checked.
 
-### Prerequisites
-- C++17-compatible compiler (GCC 7+, Clang 5+, MSVC 2017+)
-- CMake 3.20+
+## Measured results
 
-### Build
+Apple M4 Pro (14 cores), 48 GB RAM, macOS arm64, Apple clang, `-DCMAKE_BUILD_TYPE=Release` (`-O3`). Raw output for every row is committed under `results/`.
+
+| Metric | Measured | Reproduce |
+|---|---|---|
+| Sustained throughput | 9.01M ops/sec (5,000,000 ops in 0.555 s) | `./build/bench_throughput 5000000` |
+| Latency p50 / p99 / p99.9 | 83 ns / 500 ns / 583 ns | same run, phase 2 |
+| Latency mean / max | 105 ns / 276,991 ns | same run, phase 2 |
+| Limit insert, no match | 86.7 ns (11.53M/sec) | `./build/benchmarks --benchmark_min_time=1s` |
+| Limit match, one trade | 260 ns per 2 orders (7.71M orders/sec) | same |
+| Market order fill | 274 ns (3.65M/sec) | same |
+| Cancel by ID | 47.9 ns (20.89M/sec) | same |
+| Marginal cost per swept level | ~73 ns | same, `BM_MultiLevelSweep` 1 vs 1000 |
+| `sizeof(Order)` | 40 bytes, alignment 8 | `./build/print_sizes` |
+| Wire messages | 23 / 17 / 26 bytes | same |
+| Unit tests | 58 passing | `./build/tests` |
+| Sample tape replay | 51 events, 30 trades, 47 risk checks | `./build/run_replay data/sample_tape.csv` |
+
+Throughput and latency are measured separately and neither is derived from the other. Phase 1 of `bench_throughput` runs a mixed workload (35% passive buy, 35% passive sell, 20% cancel, 10% IOC cross, resting depth capped at 50,000 orders) with no instrumentation and divides the operation count by one wall-clock reading over the whole run. Phase 2 replays the identical operation sequence with two clock reads per operation into an HdrHistogram; that instrumentation costs about 12% of the rate, which is why the two are reported apart.
+
+`BM_MultiLevelSweep` carries a roughly 12 µs constant offset from Google Benchmark's per-iteration timer pause, which excludes book setup from the timed region. Only the slope across level counts is meaningful, hence the marginal figure above.
+
+## Quickstart
 
 ```bash
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build . -j$(nproc)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+
+./build/tests                             # 58 unit tests
+./build/print_sizes                       # struct and wire sizes
+./build/bench_throughput 5000000          # sustained throughput + latency percentiles
+./build/benchmarks                        # per-operation microbenchmarks
+./build/run_replay data/sample_tape.csv   # tape replay with risk and latency report
+./build/run_simulation                    # agent simulation
+./build/exchange 9876                     # TCP exchange server
 ```
 
-### Run
+With the server running, `python3 tools/risk_gate_smoke.py 9876` sends three orders and asserts that the two breaching `RiskLimits` come back rejected with order ID 0, having never reached the book.
 
-```bash
-./run_simulation                       # full trading simulation (10,000 ticks)
-./run_replay data/sample_tape.csv      # tape replay with risk + latency report
-./tests                                # 53 unit tests
-./benchmarks                           # Google Benchmark suite
-./exchange [port]                      # start TCP exchange server (default port 9876)
-```
+CMake fetches GoogleTest, Google Benchmark, and HdrHistogram_c at configure time, so the first configure needs network access.
 
-Expected simulation output:
+## Limitations
 
-```
-╔══════════════════════════════════════════════╗
-║          SIMULATION RESULTS                  ║
-║  Total Trades:         14,137                ║
-║  Total Volume:        813,020 shares         ║
-║  Average Latency:         262 ns             ║
-║  Throughput:         ~3.6M orders/sec        ║
-╚══════════════════════════════════════════════╝
-```
+- `Price` is a `double`. Production engines use scaled integers, because binary floating point cannot represent decimal tick sizes exactly and repeated arithmetic drifts. The `Price` alias exists so this is a one-line change.
+- A single mutex serialises the whole engine, so the thread-per-connection server does not scale with connection count. The standard fix is a lock-free queue feeding a single-threaded matching loop.
+- The wire protocol writes native byte order and native `double` representation, so a client and server on different architectures would disagree. It is exercised only same-host.
+- The 277 µs maximum latency is roughly 3,300x the median. The tail comes from allocator growth, page faults, and OS scheduling; nothing here is preallocated against a tail-latency target, and there is no huge-page or thread-pinning work.
+- A p50 of 83 ns is near the granularity of `steady_clock` on this host, which is why the histogram minimum reads 0 ns. Percentiles below roughly 100 ns should be read as approximate.
+- Only the simulation's price walk is seeded. Each agent seeds its RNG from `std::random_device`, so trade counts vary run to run (13,760 and 13,919 across two runs here). The replay harness, not the simulation, is the deterministic path.
+- The matching engine validates only quantity and price. Self-trade prevention, price bands, and lot sizes are not implemented.
+- Matching walks one price level per iteration, so a sweep is linear in levels crossed. No array-indexed-by-tick book.
 
-## Technical Details
-
-### Matching Algorithm — Price-Time Priority (FIFO)
-
-1. **Price priority** — incoming buys match the lowest-priced resting sells first; incoming sells match the highest-priced resting buys first.
-2. **Time priority** — within a price level, earlier orders fill first.
-3. **Price improvement** — trades execute at the resting order's price (a buy at $101 matching a sell at $100 trades at $100).
-
-### Order Book Data Structures
-
-| Structure | Implementation | Complexity |
-|---|---|---|
-| Price levels (bids / asks) | `std::map` with reversed comparator for bids | O(log N) insert, O(1) access to best price |
-| Time priority at each level | `std::list<Order*>` FIFO queue | O(1) append, O(1) iterator-based remove |
-| Order ID lookup | `std::unordered_map<OrderId, OrderLocation>` storing `{side, price, iterator}` | O(1) cancel and modify |
-| Order memory | `ObjectPool<Order>` pre-allocated at startup | No heap allocation on critical path |
-
-### Wire Protocol
-
-Three message types, all fixed-size and packed (no padding):
-
-| Message | Size | Direction |
-|---|---|---|
-| `OrderMessage` (NewOrder) | **23 bytes** | Client → Exchange |
-| `CancelMessage` | 17 bytes | Client → Exchange |
-| `ExecutionReport` | 26 bytes | Exchange → Client |
-
-Each starts with a 1-byte `MessageType` enum; fields are laid out with `#pragma pack(push, 1)` so the socket layer can `read()` / `write()` the struct directly without parsing. This is the same idea behind production binary protocols like NASDAQ ITCH and SBE (Simple Binary Encoding).
-
-### Trading Simulation
-
-A tick-based simulation drives a synthetic price via geometric Brownian motion. Each tick, every agent observes the book and submits orders:
-
-- **Market Maker** — quotes both sides with inventory-aware spread skewing; pulls quotes when inventory exceeds a threshold
-- **Momentum Trader** — SMA crossover (configurable lookback) with cooldown between trades
-- **Noise Traders** — random order flow simulating retail participation
-
-Output includes per-trade records and aggregate statistics (volume, P&L, latency distribution).
-
-### Pre-Trade Risk Checks
-
-Every incoming order passes through a `RiskChecker` before the matching engine sees it. Production exchanges and every trading desk have an equivalent layer — its absence is what allowed Knight Capital to lose $440M in 45 minutes (2012) when a deployment bug bypassed risk controls.
-
-Six checks run in evaluation order:
-
-| # | Check | Reject reason |
-|---|---|---|
-| 1 | Firm-wide kill switch | `KillSwitchActive` |
-| 2 | Quantity > 0 | `InvalidQuantity` |
-| 3 | Quantity ≤ `max_order_quantity` | `MaxOrderQuantityExceeded` |
-| 4 | Limit order has positive price | `InvalidPrice` |
-| 5 | `price × qty` ≤ `max_order_notional` | `MaxOrderNotionalExceeded` |
-| 6 | `|net position after fill|` ≤ `max_position_abs` | `MaxPositionExceeded` |
-| 7 | Firm-wide notional ≤ `max_notional_exposure` | `MaxNotionalExposureExceeded` |
-
-`RiskChecker.on_fill()` updates per-symbol net positions and the running firm-wide notional after every match. Rejection counts are tracked per reason via `RiskStats`.
-
-### Latency Histograms (HdrHistogram)
-
-`metrics::LatencyHistogram` wraps [HdrHistogram_c](https://github.com/HdrHistogram/HdrHistogram_c) — the standard data structure for recording latency distributions at scale. Key properties:
-
-- **O(1) per record** regardless of sample count
-- **Constant memory** (~few KB) across billions of samples
-- **Configurable resolution** (default: 3 significant figures = 0.1% bucket accuracy)
-- **Coordinated-omission correction** via `record_corrected()` to account for measurement-induced skew
-
-Query any percentile: `histogram.value_at_percentile(99.9)`. Used in production by LMAX Disruptor, Cassandra, Kafka, Elasticsearch, and most major HFT firms. The replay harness (below) populates a per-op histogram and reports p50 / p90 / p99 / p99.9 / max in its summary.
-
-### Tape Replay (Regression Testing)
-
-`replay::ReplayHarness` reads a CSV tape of historical orders + cancels and feeds them through the matching engine. This is the technique every production exchange uses to certify code changes: re-run a representative trading day's events through the new build, diff the trade output against the previous build, and gate the release on zero divergence.
-
-CSV format:
+## Layout
 
 ```
-timestamp_ns,symbol,side,type,price,quantity,action,order_id
-1000000000,AAPL,B,L,150.00,100,N,1
-1000001500,AAPL,S,L,150.05,80,N,2
-1000005000,AAPL,,,,,C,2
-```
-
-`action`: `N` = new order, `C` = cancel. `side`: `B` / `S`. `type`: `L` / `M` / `I` (limit / market / IOC).
-
-A sample 51-event tape is included at `data/sample_tape.csv`. Run with:
-
-```bash
-./run_replay data/sample_tape.csv
-```
-
-### Memory Layout
-
-The `Order` struct is sized to fit two orders per 64-byte cache line, achieved by ordering fields to minimize alignment padding and using `uint8_t` enums:
-
-```cpp
-struct Order {
-    OrderId     id;              // 8 bytes
-    Price       price;           // 8 bytes
-    Quantity    quantity;        // 4 bytes
-    Quantity    remaining_qty;   // 4 bytes
-    Timestamp   timestamp;       // 8 bytes
-    Side        side;            // 1 byte
-    OrderType   type;            // 1 byte
-    OrderStatus status;          // 1 byte
-};  // ~42 bytes total
-```
-
-## Project Structure
-
-```
-order-book-exchange/
-├── include/
-│   ├── core/                    # Types, Order, OrderBook, MatchingEngine, ObjectPool
-│   ├── network/                 # TcpServer, packed binary Protocol
-│   ├── simulation/              # Trader, MarketMaker, MomentumTrader, NoiseTrader, Simulation
-│   ├── risk/
-│   │   └── RiskChecker.h        # Pre-trade kill switch, position/notional caps
-│   ├── metrics/
-│   │   └── LatencyHistogram.h   # HdrHistogram wrapper (p50/p99/p99.9)
-│   └── replay/
-│       └── ReplayHarness.h      # CSV tape replay with risk + latency
-├── src/                         # Implementation files (mirrors include/)
-├── tests/                       # 53 Google Test cases
-│   ├── test_order.cpp           #   4 cases
-│   ├── test_orderbook.cpp       #  14 cases
-│   ├── test_matching_engine.cpp #  14 cases
-│   ├── test_risk_checker.cpp    #  11 cases (limits, kill switch, position tracking)
-│   ├── test_latency_histogram.cpp # 6 cases (percentiles, dynamic range)
-│   └── test_replay_harness.cpp  #   4 cases (tape replay end-to-end)
-├── benchmarks/
-│   └── bench_matching_engine.cpp   # 5 Google Benchmark scenarios
-├── data/
-│   └── sample_tape.csv          # 51-event AAPL/MSFT tape for replay
-└── CMakeLists.txt
+include/core/        Types, Order, OrderBook, MatchingEngine, ObjectPool
+include/network/     TcpServer, packed binary Protocol
+include/risk/        RiskChecker (kill switch, order and position and exposure caps)
+include/metrics/     LatencyHistogram (HdrHistogram_c wrapper)
+include/replay/      ReplayHarness (CSV tape replay)
+include/simulation/  Trader, MarketMaker, MomentumTrader, NoiseTrader, Simulation
+src/                 Implementations, mirrors include/
+tests/               58 GoogleTest cases across 8 suites
+benchmarks/          Per-operation microbenchmarks; sustained-throughput harness
+tools/               print_sizes, risk_gate_smoke.py
+results/             Committed output of every number quoted above
+data/                51-event sample tape
 ```
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).

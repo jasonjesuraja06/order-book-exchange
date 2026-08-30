@@ -1,4 +1,5 @@
 #include "network/TcpServer.h"
+#include "risk/RiskChecker.h"
 #include "network/Protocol.h"
 
 #include <iostream>
@@ -9,9 +10,11 @@
 
 namespace exchange {
 
-TcpServer::TcpServer(MatchingEngine& engine, uint16_t port)
+TcpServer::TcpServer(MatchingEngine& engine, uint16_t port,
+                     risk::RiskChecker* risk)
     : engine_(engine)
     , port_(port)
+    , risk_(risk)
 {}
 
 TcpServer::~TcpServer() {
@@ -19,42 +22,26 @@ TcpServer::~TcpServer() {
 }
 
 // ============================================================
-// START — Set up the listening socket and accept connections
+// START — listening socket and accept loop
 // ============================================================
-//
-// SOCKET PROGRAMMING 101 (ELI5):
-//
-// A socket is like a phone line for programs. Here's the process:
-//
-// 1. socket()   — Buy a phone (create a socket file descriptor)
-// 2. bind()     — Assign it a phone number (IP address + port)
-// 3. listen()   — Turn it on and wait for calls
-// 4. accept()   — Pick up when someone calls (blocks until a client connects)
-//
-// After accept(), you get a NEW socket for that specific conversation.
-// The original socket keeps listening for more calls.
-//
-// File descriptors (the int values) are how Unix represents open
-// connections. Everything in Unix is a file — sockets, pipes, files
-// on disk — all identified by an integer "file descriptor."
+// socket, bind, listen, then accept in a loop. accept() returns a
+// separate descriptor per connection while the listening descriptor
+// stays open for the next one; each connection descriptor is handed
+// to its own thread.
 // ============================================================
 void TcpServer::start() {
-    // Step 1: Create the socket
-    // AF_INET = IPv4, SOCK_STREAM = TCP (reliable, ordered delivery)
-    // SOCK_DGRAM would be UDP (unreliable, unordered, but faster)
     server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd_ < 0) {
         std::cerr << "Failed to create socket\n";
         return;
     }
 
-    // SO_REUSEADDR: Allow reuse of the port immediately after the
-    // server stops. Without this, you'd get "Address already in use"
-    // errors for ~60 seconds after stopping the server (TIME_WAIT state).
+    // SO_REUSEADDR: rebind the port immediately after shutdown instead
+    // of waiting out the TIME_WAIT interval.
     int opt = 1;
     setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-    // Step 2: Bind to address + port
+    // Bind to address and port.
     struct sockaddr_in addr{};
     addr.sin_family = AF_INET;          // IPv4
     addr.sin_addr.s_addr = INADDR_ANY;  // Listen on all network interfaces
@@ -145,13 +132,31 @@ void TcpServer::handle_client(int client_fd) {
                      sizeof(msg) - 1, MSG_WAITALL);
             if (n <= 0) break;
 
-            // Submit to matching engine
+            // Pre-trade risk runs before the engine sees the order. A
+            // failing check is answered with a Rejected report and the
+            // order never reaches the book.
+            if (risk_) {
+                risk::RejectReason reason = risk_->check(
+                    msg.get_symbol(), msg.side, msg.order_type,
+                    msg.price, msg.quantity);
+
+                if (reason != risk::RejectReason::None) {
+                    ExecutionReport report;
+                    report.order_id = 0;
+                    report.status = OrderStatus::Rejected;
+                    report.price = msg.price;
+                    report.quantity = msg.quantity;
+                    report.remaining_qty = msg.quantity;
+                    send(client_fd, &report, sizeof(report), 0);
+                    continue;
+                }
+            }
+
             OrderId id = engine_.submit_order(
                 msg.get_symbol(), msg.side, msg.order_type,
                 msg.price, msg.quantity
             );
 
-            // Send execution report back
             ExecutionReport report;
             report.order_id = id;
             report.status = (id > 0) ? OrderStatus::Accepted : OrderStatus::Rejected;
